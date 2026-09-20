@@ -5,6 +5,7 @@ import cors from "cors";
 
 import subscriptionRoutes from "./routes/subscription.routes.js";
 import razorpayWebhookRoutes from "./routes/razorpay.webhook.routes.js";
+import drawRoutes from "./routes/draw.routes.js";
 
 const app = express();
 
@@ -33,6 +34,11 @@ app.get("/", (req, res) => {
 app.use(
   "/api/subscriptions",
   subscriptionRoutes
+);
+
+app.use(
+  "/api/draws",
+  drawRoutes
 );
 
 const PORT = process.env.PORT || 5000;
