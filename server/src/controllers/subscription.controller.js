@@ -242,7 +242,51 @@ const verifySubscriptionPayment = async (req, res) => {
   }
 };
 
+// --------------------------------------------------
+// --------------------------------------------------
+
+const getMySubscription = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select(`
+        *,
+        subscription_plans (
+          name,
+          billing_interval,
+          price
+        )
+      `)
+      .eq("user_id", req.user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Get subscription error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch subscription",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      subscription: data,
+    });
+  } catch (error) {
+    console.error("Get subscription error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 export {
   createSubscription,
   verifySubscriptionPayment,
+  getMySubscription,
 };
