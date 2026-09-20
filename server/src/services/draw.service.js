@@ -59,7 +59,7 @@ const getActiveSubscribers = async () => {
       plan_id,
       subscription_plans (
         price,
-        billing_interval
+        billing_interval,
         prize_pool_percentage
       )
     `)
