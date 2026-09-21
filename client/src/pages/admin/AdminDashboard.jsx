@@ -1,395 +1,493 @@
 import { useEffect, useState } from "react";
+import {
+  Users,
+  UserCheck,
+  Trophy,
+  Heart,
+  Target,
+  IndianRupee,
+  CalendarDays,
+  ArrowRight,
+  Activity,
+} from "lucide-react";
+import { Link } from "react-router-dom";
+
 import { supabase } from "../../lib/supabase";
+import Loader from "../../components/Loader/Loader";
 
-const API_URL = import.meta.env.VITE_API_URL;
+import "./AdminDashboard.css";
 
-const AdminDashboard = () => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+const API_URL =
+  import.meta.env.VITE_API_URL;
 
-    const loadDashboard = async () => {
-        try {
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
 
-            if (!session) {
-                throw new Error("Please login");
-            }
+function formatDate(date) {
+  if (!date) return "—";
 
-            const response = await fetch(
-                `${API_URL}/api/admin/dashboard`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${session.access_token}`,
-                    },
-                }
-            );
+  return new Date(date).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.message || "Failed to load dashboard");
-            }
-
-            setData(result);
-        } catch (error) {
-            console.error(error);
-            alert(error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadDashboard();
-    }, []);
-
-    if (loading) {
-        return (
-            <div style={styles.loading}>
-                Loading admin dashboard...
-            </div>
-        );
-    }
-
-    if (!data) {
-        return (
-            <div style={styles.loading}>
-                Unable to load dashboard.
-            </div>
-        );
-    }
-
-    const stats = [
-        {
-            title: "Total Users",
-            value: data.stats.users,
-            icon: "👥",
-        },
-        {
-            title: "Active Subscriptions",
-            value: data.stats.activeSubscriptions,
-            icon: "💳",
-        },
-        {
-            title: "Total Subscriptions",
-            value: data.stats.subscriptions,
-            icon: "📊",
-        },
-        {
-            title: "Golf Scores",
-            value: data.stats.scores,
-            icon: "⛳",
-        },
-        {
-            title: "Active Charities",
-            value: data.stats.charities,
-            icon: "❤️",
-        },
-        {
-            title: "Winners",
-            value: data.stats.winners,
-            icon: "🏆",
-        },
-    ];
-
-    return (
-        <div style={styles.page}>
-
-            <div style={styles.header}>
-                <div>
-                    <p style={styles.eyebrow}>ADMIN PANEL</p>
-
-                    <h1 style={styles.title}>
-                        Dashboard
-                    </h1>
-
-                    <p style={styles.subtitle}>
-                        Overview of your platform activity
-                    </p>
-                </div>
-
-                <button
-                    style={styles.refresh}
-                    onClick={loadDashboard}
-                >
-                    ↻ Refresh
-                </button>
-            </div>
-
-
-            {/* STATS */}
-
-            <div style={styles.statsGrid}>
-                {stats.map((stat) => (
-                    <div
-                        key={stat.title}
-                        style={styles.card}
-                    >
-                        <div style={styles.cardTop}>
-                            <span style={styles.icon}>
-                                {stat.icon}
-                            </span>
-
-                            <span style={styles.dot} />
-                        </div>
-
-                        <p style={styles.cardTitle}>
-                            {stat.title}
-                        </p>
-
-                        <h2 style={styles.number}>
-                            {stat.value}
-                        </h2>
-                    </div>
-                ))}
-            </div>
-
-
-            {/* RECENT DRAWS */}
-
-            <div style={styles.section}>
-
-                <div style={styles.sectionHeader}>
-                    <div>
-                        <p style={styles.eyebrow}>
-                            DRAW ACTIVITY
-                        </p>
-
-                        <h2 style={styles.sectionTitle}>
-                            Recent Draws
-                        </h2>
-                    </div>
-                </div>
-
-
-                {data.recentDraws.length === 0 ? (
-                    <div style={styles.empty}>
-                        No draws created yet.
-                    </div>
-                ) : (
-                    <div style={styles.drawList}>
-
-                        {data.recentDraws.map((draw) => (
-                            <div
-                                key={draw.id}
-                                style={styles.drawRow}
-                            >
-
-                                <div>
-                                    <strong>
-                                        {draw.draw_month}
-                                    </strong>
-
-                                    <p style={styles.small}>
-                                        {draw.draw_type} lottery
-                                    </p>
-                                </div>
-
-
-                                <div style={styles.numbers}>
-                                    {(draw.numbers || []).map(
-                                        (number) => (
-                                            <span
-                                                key={number}
-                                                style={styles.numberBall}
-                                            >
-                                                {number}
-                                            </span>
-                                        )
-                                    )}
-                                </div>
-
-
-                                <span
-                                    style={{
-                                        ...styles.status,
-                                        ...(draw.status === "published"
-                                            ? styles.published
-                                            : {}),
-                                    }}
-                                >
-                                    {draw.status}
-                                </span>
-
-                            </div>
-                        ))}
-
-                    </div>
-                )}
-
-            </div>
-
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+  href,
+}) {
+  const content = (
+    <div className="admin-stat-card">
+      <div className="admin-stat-top">
+        <div className="admin-stat-icon">
+          <Icon size={20} />
         </div>
+
+        {href && (
+          <ArrowRight
+            size={17}
+            className="admin-stat-arrow"
+          />
+        )}
+      </div>
+
+      <div className="admin-stat-value">{value}</div>
+
+      <div className="admin-stat-title">{title}</div>
+
+      {description && (
+        <div className="admin-stat-description">
+          {description}
+        </div>
+      )}
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link to={href} className="admin-stat-link">
+        {content}
+      </Link>
     );
-};
+  }
 
+  return content;
+}
 
-const styles = {
-    page: {
-        minHeight: "100vh",
-        padding: "40px",
-        background: "#080909",
-        color: "#fff",
-    },
+export default function AdminDashboard() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    loading: {
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "#080909",
-        color: "#fff",
-        fontSize: "18px",
-    },
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    header: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "35px",
-    },
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    eyebrow: {
-        margin: 0,
-        color: "#a3e635",
-        fontSize: "12px",
-        fontWeight: 700,
-        letterSpacing: "2px",
-    },
+      if (sessionError) {
+        throw sessionError;
+      }
 
-    title: {
-        fontSize: "42px",
-        margin: "7px 0",
-    },
+      if (!session?.access_token) {
+        throw new Error("Admin session not found.");
+      }
 
-    subtitle: {
-        margin: 0,
-        color: "#8c8c8c",
-    },
+      const response = await fetch(
+        `${API_URL}/api/admin/dashboard`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    refresh: {
-        background: "#a3e635",
-        color: "#101010",
-        border: "none",
-        padding: "11px 18px",
-        borderRadius: "10px",
-        cursor: "pointer",
-        fontWeight: 700,
-    },
+      const result = await response.json();
 
-    statsGrid: {
-        display: "grid",
-        gridTemplateColumns:
-            "repeat(auto-fit, minmax(190px, 1fr))",
-        gap: "18px",
-    },
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Failed to load admin dashboard."
+        );
+      }
 
-    card: {
-        background: "#111313",
-        border: "1px solid #242626",
-        borderRadius: "18px",
-        padding: "22px",
-    },
+      setStats(result.stats || result.data || {});
+    } catch (err) {
+      console.error("ADMIN DASHBOARD ERROR:", err);
+      setError(
+        err.message || "Unable to load dashboard data."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    cardTop: {
-        display: "flex",
-        justifyContent: "space-between",
-    },
+  useEffect(() => {
+    loadDashboard();
+  }, []);
 
-    icon: {
-        fontSize: "24px",
-    },
+  if (loading) {
+    return (
+      <div className="admin-dashboard-loading">
+        <Loader />
+      </div>
+    );
+  }
 
-    dot: {
-        width: "8px",
-        height: "8px",
-        borderRadius: "50%",
-        background: "#a3e635",
-    },
+  return (
+    <section className="admin-dashboard">
+      <div className="admin-page-header">
+        <div>
+          <span className="admin-eyebrow">
+            ADMIN CONTROL CENTER
+          </span>
 
-    cardTitle: {
-        color: "#8c8c8c",
-        marginBottom: "5px",
-    },
+          <h1>Dashboard</h1>
 
-    number: {
-        fontSize: "34px",
-        margin: 0,
-    },
+          <p>
+            Monitor subscribers, scores, draws, charities,
+            winners and payouts from one place.
+          </p>
+        </div>
 
-    section: {
-        marginTop: "35px",
-        background: "#111313",
-        border: "1px solid #242626",
-        borderRadius: "18px",
-        padding: "25px",
-    },
+        <button
+          type="button"
+          className="admin-refresh-btn"
+          onClick={loadDashboard}
+        >
+          <Activity size={17} />
+          Refresh
+        </button>
+      </div>
 
-    sectionHeader: {
-        marginBottom: "20px",
-    },
+      {error && (
+        <div className="admin-error">
+          <strong>Unable to load dashboard</strong>
+          <span>{error}</span>
 
-    sectionTitle: {
-        margin: "6px 0 0",
-        fontSize: "24px",
-    },
+          <button
+            type="button"
+            onClick={loadDashboard}
+          >
+            Try Again
+          </button>
+        </div>
+      )}
 
-    drawList: {
-        display: "flex",
-        flexDirection: "column",
-    },
+      {!error && (
+        <>
+          <div className="admin-stats-grid">
+            <StatCard
+              title="Total Users"
+              value={stats?.users ?? stats?.totalUsers ?? 0}
+              description="Registered accounts"
+              icon={Users}
+              href="/admin/users"
+            />
 
-    drawRow: {
-        display: "grid",
-        gridTemplateColumns: "1fr 2fr auto",
-        alignItems: "center",
-        gap: "20px",
-        padding: "18px 0",
-        borderBottom: "1px solid #242626",
-    },
+            <StatCard
+              title="Active Subscribers"
+              value={
+                stats?.activeSubscriptions ??
+                stats?.activeSubscribers ??
+                0
+              }
+              description="Currently active plans"
+              icon={UserCheck}
+              href="/admin/subscriptions"
+            />
 
-    small: {
-        margin: "5px 0 0",
-        color: "#777",
-        fontSize: "13px",
-    },
+            <StatCard
+              title="Total Scores"
+              value={stats?.scores ?? stats?.totalScores ?? 0}
+              description="Stableford score entries"
+              icon={Target}
+              href="/admin/scores"
+            />
 
-    numbers: {
-        display: "flex",
-        gap: "8px",
-    },
+            <StatCard
+              title="Charities"
+              value={
+                stats?.charities ??
+                stats?.totalCharities ??
+                0
+              }
+              description="Active charity listings"
+              icon={Heart}
+              href="/admin/charities"
+            />
 
-    numberBall: {
-        width: "34px",
-        height: "34px",
-        borderRadius: "50%",
-        background: "#202323",
-        display: "grid",
-        placeItems: "center",
-        fontSize: "13px",
-        fontWeight: 700,
-    },
+            <StatCard
+              title="Winners"
+              value={
+                stats?.winners ??
+                stats?.totalWinners ??
+                0
+              }
+              description="Recorded winning entries"
+              icon={Trophy}
+              href="/admin/winners"
+            />
 
-    status: {
-        padding: "6px 10px",
-        borderRadius: "20px",
-        background: "#242424",
-        color: "#aaa",
-        fontSize: "12px",
-        textTransform: "capitalize",
-    },
+            <StatCard
+              title="Pending Payouts"
+              value={
+                stats?.pendingPayouts ??
+                stats?.pending_payouts ??
+                0
+              }
+              description="Awaiting admin action"
+              icon={IndianRupee}
+              href="/admin/winners"
+            />
+          </div>
 
-    published: {
-        background: "#243514",
-        color: "#a3e635",
-    },
+          <div className="admin-dashboard-grid">
+            <section className="admin-panel">
+              <div className="admin-panel-header">
+                <div>
+                  <span className="admin-panel-label">
+                    DRAW SYSTEM
+                  </span>
 
-    empty: {
-        padding: "30px",
-        textAlign: "center",
-        color: "#777",
-    },
-};
+                  <h2>Recent Draws</h2>
+                </div>
 
-export default AdminDashboard;
+                <Link
+                  to="/admin/draws"
+                  className="admin-view-link"
+                >
+                  View all
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
+
+              {stats?.recentDraws?.length > 0 ? (
+                <div className="admin-table-wrapper">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th>Numbers</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {stats.recentDraws.map((draw) => (
+                        <tr key={draw.id}>
+                          <td>
+                            <strong>
+                              {draw.draw_month || "—"}
+                            </strong>
+                          </td>
+
+                          <td>
+                            <div className="draw-number-list">
+                              {Array.isArray(draw.numbers)
+                                ? draw.numbers.map(
+                                    (number, index) => (
+                                      <span key={index}>
+                                        {number}
+                                      </span>
+                                    )
+                                  )
+                                : "—"}
+                            </div>
+                          </td>
+
+                          <td>
+                            <span
+                              className={`admin-status ${
+                                draw.published_at
+                                  ? "published"
+                                  : "pending"
+                              }`}
+                            >
+                              {draw.published_at
+                                ? "Published"
+                                : "Draft"}
+                            </span>
+                          </td>
+
+                          <td>
+                            {formatDate(
+                              draw.published_at ||
+                                draw.created_at
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="admin-empty">
+                  <CalendarDays size={28} />
+                  <p>No draws available yet.</p>
+
+                  <Link to="/admin/draws">
+                    Open Draw Management
+                  </Link>
+                </div>
+              )}
+            </section>
+
+            <section className="admin-panel">
+              <div className="admin-panel-header">
+                <div>
+                  <span className="admin-panel-label">
+                    PLATFORM
+                  </span>
+
+                  <h2>Quick Actions</h2>
+                </div>
+              </div>
+
+              <div className="admin-actions">
+                <Link
+                  to="/admin/users"
+                  className="admin-action"
+                >
+                  <Users size={19} />
+
+                  <div>
+                    <strong>Manage Users</strong>
+                    <span>
+                      View and manage registered users
+                    </span>
+                  </div>
+
+                  <ArrowRight size={16} />
+                </Link>
+
+                <Link
+                  to="/admin/subscriptions"
+                  className="admin-action"
+                >
+                  <UserCheck size={19} />
+
+                  <div>
+                    <strong>Subscriptions</strong>
+                    <span>
+                      Monitor active subscription plans
+                    </span>
+                  </div>
+
+                  <ArrowRight size={16} />
+                </Link>
+
+                <Link
+                  to="/admin/winners"
+                  className="admin-action"
+                >
+                  <Trophy size={19} />
+
+                  <div>
+                    <strong>Winner Verification</strong>
+                    <span>
+                      Review proofs and payouts
+                    </span>
+                  </div>
+
+                  <ArrowRight size={16} />
+                </Link>
+
+                <Link
+                  to="/admin/analytics"
+                  className="admin-action"
+                >
+                  <Activity size={19} />
+
+                  <div>
+                    <strong>Analytics</strong>
+                    <span>
+                      View platform performance
+                    </span>
+                  </div>
+
+                  <ArrowRight size={16} />
+                </Link>
+              </div>
+            </section>
+          </div>
+
+          <section className="admin-panel admin-summary-panel">
+            <div className="admin-panel-header">
+              <div>
+                <span className="admin-panel-label">
+                  FINANCIAL OVERVIEW
+                </span>
+
+                <h2>Platform Summary</h2>
+              </div>
+            </div>
+
+            <div className="admin-summary-grid">
+              <div className="admin-summary-item">
+                <span>Total Prize Pool</span>
+
+                <strong>
+                  {formatCurrency(
+                    stats?.totalPrizePool ??
+                      stats?.prizePool ??
+                      0
+                  )}
+                </strong>
+              </div>
+
+              <div className="admin-summary-item">
+                <span>Charity Contributions</span>
+
+                <strong>
+                  {formatCurrency(
+                    stats?.charityContributions ??
+                      stats?.totalCharityContributions ??
+                      0
+                  )}
+                </strong>
+              </div>
+
+              <div className="admin-summary-item">
+                <span>Pending Payout Amount</span>
+
+                <strong>
+                  {formatCurrency(
+                    stats?.pendingPayoutAmount ??
+                      stats?.pending_payout_amount ??
+                      0
+                  )}
+                </strong>
+              </div>
+
+              <div className="admin-summary-item">
+                <span>Latest Draw</span>
+
+                <strong>
+                  {stats?.latestDraw?.draw_month ||
+                    stats?.latestDrawMonth ||
+                    "Not published"}
+                </strong>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+    </section>
+  );
+}

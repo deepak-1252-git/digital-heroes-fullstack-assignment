@@ -1,11 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import {
+  CheckCircle2,
+  CalendarDays,
+  IndianRupee,
+  Heart,
+  Trophy,
+  AlertCircle,
+  CreditCard,
+} from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
+import Card from "../../components/Card/Card";
+import Badge from "../../components/Badge/Badge";
+import Loader from "../../components/Loader/Loader";
+
+import "./Subscription.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 const Subscription = () => {
-  const [loading, setLoading] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState(null);
+  const [error, setError] = useState("");
 
+  const [searchParams] = useSearchParams();
+  const selectedPlan = searchParams.get("plan");
+  const autoCheckoutStarted = useRef(false);
+
+  // --------------------------------
+  // Load Razorpay Checkout
+  // --------------------------------
   useEffect(() => {
     const script = document.createElement("script");
 
@@ -19,20 +45,100 @@ const Subscription = () => {
     };
   }, []);
 
-  const handleSubscribe = async (plan) => {
+  // --------------------------------
+  // Load current subscription
+  // --------------------------------
+  const loadSubscription = async () => {
     try {
-      setLoading(plan);
+      setLoading(true);
+      setError("");
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
       if (!session) {
-        alert("Please login first.");
+        setError("Please login to view your subscription.");
         return;
       }
 
-      // Create Razorpay subscription from backend
+      const response = await fetch(
+        `${API_URL}/api/subscriptions/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      console.log("SUBSCRIPTION API RESULT:", result);
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to load subscription"
+        );
+      }
+
+      setSubscription(result.subscription || null);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSubscription();
+  }, []);
+
+
+  useEffect(() => {
+    if (
+      loading ||
+      subscription ||
+      !selectedPlan ||
+      autoCheckoutStarted.current
+    ) {
+      return;
+    }
+
+    if (
+      selectedPlan !== "monthly" &&
+      selectedPlan !== "yearly"
+    ) {
+      return;
+    }
+
+    autoCheckoutStarted.current = true;
+
+    handleSubscribe(selectedPlan);
+  }, [
+    loading,
+    subscription,
+    selectedPlan,
+  ]);
+
+  // --------------------------------
+  // Razorpay subscription
+  // --------------------------------
+  const handleSubscribe = async (plan) => {
+    try {
+      setPaymentLoading(plan);
+      setError("");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        setError("Please login first.");
+        return;
+      }
+
+      // Create Razorpay subscription
       const response = await fetch(
         `${API_URL}/api/subscriptions/create`,
         {
@@ -52,10 +158,18 @@ const Subscription = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Subscription creation failed");
+        throw new Error(
+          data.message || "Subscription creation failed"
+        );
       }
 
       const subscriptionId = data.subscription.id;
+
+      if (!window.Razorpay) {
+        throw new Error(
+          "Razorpay Checkout failed to load. Please try again."
+        );
+      }
 
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -69,16 +183,21 @@ const Subscription = () => {
             ? "Digital Heroes Monthly Subscription"
             : "Digital Heroes Yearly Subscription",
 
-        handler: async (response) => {
+        handler: async (razorpayResponse) => {
           try {
-            console.log("Razorpay response:", response);
+            console.log(
+              "Razorpay response:",
+              razorpayResponse
+            );
 
             const {
-              data: { session },
+              data: { session: currentSession },
             } = await supabase.auth.getSession();
 
-            if (!session) {
-              throw new Error("Session expired. Please login again.");
+            if (!currentSession) {
+              throw new Error(
+                "Session expired. Please login again."
+              );
             }
 
             const verifyResponse = await fetch(
@@ -88,38 +207,44 @@ const Subscription = () => {
 
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${session.access_token}`,
+                  Authorization: `Bearer ${currentSession.access_token}`,
                 },
 
                 body: JSON.stringify({
                   razorpay_payment_id:
-                    response.razorpay_payment_id,
+                    razorpayResponse.razorpay_payment_id,
 
                   razorpay_subscription_id:
-                    response.razorpay_subscription_id,
+                    razorpayResponse.razorpay_subscription_id,
 
                   razorpay_signature:
-                    response.razorpay_signature,
+                    razorpayResponse.razorpay_signature,
                 }),
               }
             );
 
-            const data = await verifyResponse.json();
+            const verifyData = await verifyResponse.json();
 
             if (!verifyResponse.ok) {
               throw new Error(
-                data.message || "Payment verification failed"
+                verifyData.message ||
+                "Payment verification failed"
               );
             }
 
-            alert("Subscription activated successfully! 🎉");
-
-            window.location.href = "/dashboard";
-          } catch (error) {
-            console.error("Verification error:", error);
-
             alert(
-              error.message ||
+              "Subscription activated successfully! 🎉"
+            );
+
+            await loadSubscription();
+          } catch (verificationError) {
+            console.error(
+              "Verification error:",
+              verificationError
+            );
+
+            setError(
+              verificationError.message ||
               "Payment was completed but verification failed."
             );
           }
@@ -140,130 +265,337 @@ const Subscription = () => {
         },
       };
 
-      if (!window.Razorpay) {
-        throw new Error("Razorpay Checkout failed to load");
-      }
-
       const razorpay = new window.Razorpay(options);
 
       razorpay.on("payment.failed", (response) => {
-        console.error("Payment failed:", response.error);
+        console.error(
+          "Payment failed:",
+          response.error
+        );
 
-        alert(
+        setError(
           response.error?.description ||
           "Payment failed. Please try again."
         );
       });
 
       razorpay.open();
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
 
-      alert(error.message || "Something went wrong");
+      setError(
+        err.message || "Something went wrong."
+      );
     } finally {
-      setLoading(null);
+      setPaymentLoading(null);
     }
   };
 
+  // --------------------------------
+  // Loading
+  // --------------------------------
+  if (loading) {
+    return (
+      <div className="subscription-page">
+        <Loader />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-8">
-      <div className="max-w-5xl mx-auto">
+    <div className="subscription-page">
 
-        <div className="mb-10">
-          <p className="text-lime-400 text-sm uppercase tracking-widest">
+      {/* HEADER */}
+      <div className="subscription-header">
+        <div>
+          <span className="page-eyebrow">
             Membership
+          </span>
+
+          <h1>Your Subscription</h1>
+
+          <p>
+            Manage your membership, billing period and
+            contribution to the prize pool and charity.
           </p>
-
-          <h1 className="text-4xl font-bold mt-2">
-            Choose your subscription
-          </h1>
-
-          <p className="text-gray-400 mt-3">
-            Support charity, participate in monthly draws,
-            and unlock your full Digital Heroes experience.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-
-          {/* Monthly */}
-          <div className="border border-white/10 rounded-2xl p-7 bg-white/[0.03]">
-
-            <h2 className="text-2xl font-semibold">
-              Monthly
-            </h2>
-
-            <div className="mt-5">
-              <span className="text-4xl font-bold">
-                ₹999
-              </span>
-
-              <span className="text-gray-400">
-                /month
-              </span>
-            </div>
-
-            <ul className="mt-6 space-y-3 text-gray-300">
-              <li>✓ Monthly subscription</li>
-              <li>✓ Golf score tracking</li>
-              <li>✓ Monthly draw participation</li>
-              <li>✓ Charity contribution</li>
-            </ul>
-
-            <button
-              onClick={() => handleSubscribe("monthly")}
-              disabled={loading !== null}
-              className="w-full mt-8 bg-lime-400 text-black font-semibold py-3 rounded-xl hover:bg-lime-300 transition disabled:opacity-50"
-            >
-              {loading === "monthly"
-                ? "Processing..."
-                : "Subscribe Monthly"}
-            </button>
-          </div>
-
-          {/* Yearly */}
-          <div className="border border-lime-400/30 rounded-2xl p-7 bg-lime-400/[0.04]">
-
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-semibold">
-                Yearly
-              </h2>
-
-              <span className="text-xs bg-lime-400 text-black px-3 py-1 rounded-full font-semibold">
-                BEST VALUE
-              </span>
-            </div>
-
-            <div className="mt-5">
-              <span className="text-4xl font-bold">
-                ₹9,999
-              </span>
-
-              <span className="text-gray-400">
-                /year
-              </span>
-            </div>
-
-            <ul className="mt-6 space-y-3 text-gray-300">
-              <li>✓ Full year membership</li>
-              <li>✓ Golf score tracking</li>
-              <li>✓ Monthly draw participation</li>
-              <li>✓ Charity contribution</li>
-            </ul>
-
-            <button
-              onClick={() => handleSubscribe("yearly")}
-              disabled={loading !== null}
-              className="w-full mt-8 bg-lime-400 text-black font-semibold py-3 rounded-xl hover:bg-lime-300 transition disabled:opacity-50"
-            >
-              {loading === "yearly"
-                ? "Processing..."
-                : "Subscribe Yearly"}
-            </button>
-          </div>
-
         </div>
       </div>
+
+      {/* ERROR */}
+      {error && (
+        <div className="subscription-message error">
+          <AlertCircle size={18} />
+
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* -------------------------------- */}
+      {/* NO SUBSCRIPTION */}
+      {/* -------------------------------- */}
+
+      {!subscription && !error && (
+        <Card className="no-subscription">
+
+          <div className="no-subscription-icon">
+            <Trophy size={28} />
+          </div>
+
+          <h2>No active subscription</h2>
+
+          <p>
+            Subscribe to participate in monthly draws
+            and support your chosen charity.
+          </p>
+
+          <div className="subscription-options">
+
+            {/* MONTHLY */}
+            <div className="subscription-option">
+
+              <div>
+                <span>Monthly</span>
+
+                <strong>
+                  ₹999
+                </strong>
+
+                <small>/ month</small>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSubscribe("monthly")
+                }
+                disabled={paymentLoading !== null}
+              >
+                <CreditCard size={17} />
+
+                {paymentLoading === "monthly"
+                  ? "Processing..."
+                  : "Subscribe Monthly"}
+              </button>
+
+            </div>
+
+            {/* YEARLY */}
+            <div className="subscription-option featured">
+
+              <div>
+                <span>Yearly</span>
+
+                <strong>
+                  ₹9,999
+                </strong>
+
+                <small>/ year</small>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSubscribe("yearly")
+                }
+                disabled={paymentLoading !== null}
+              >
+                <CreditCard size={17} />
+
+                {paymentLoading === "yearly"
+                  ? "Processing..."
+                  : "Subscribe Yearly"}
+              </button>
+
+            </div>
+
+          </div>
+
+        </Card>
+      )}
+
+      {/* -------------------------------- */}
+      {/* ACTIVE SUBSCRIPTION */}
+      {/* -------------------------------- */}
+
+      {subscription && (
+        <>
+          <Card className="current-plan-card">
+
+            <div className="plan-top">
+
+              <div>
+                <span className="plan-label">
+                  Current Plan
+                </span>
+
+                <h2>
+                  {subscription.subscription_plans
+                    ?.billing_interval === "yearly"
+                    ? "Yearly"
+                    : "Monthly"}{" "}
+                  Membership
+                </h2>
+              </div>
+
+              <Badge>
+                {subscription.status?.toUpperCase()}
+              </Badge>
+
+            </div>
+
+            {/* PRICE */}
+
+            <div className="plan-price">
+
+              <IndianRupee size={25} />
+
+              <strong>
+                {Number(
+                  subscription.subscription_plans
+                    ?.price || 0
+                ).toLocaleString("en-IN")}
+              </strong>
+
+              <span>
+                /
+                {subscription.subscription_plans
+                  ?.billing_interval === "yearly"
+                  ? "year"
+                  : "month"}
+              </span>
+
+            </div>
+
+            {/* DETAILS */}
+
+            <div className="plan-details">
+
+              {/* PERIOD */}
+
+              <div className="subscription-detail">
+
+                <CalendarDays size={18} />
+
+                <div>
+
+                  <span>
+                    Current Period
+                  </span>
+
+                  <strong>
+                    {subscription.current_period_start
+                      ? new Date(
+                        subscription.current_period_start
+                      ).toLocaleDateString("en-IN")
+                      : "—"}
+
+                    {" – "}
+
+                    {subscription.current_period_end
+                      ? new Date(
+                        subscription.current_period_end
+                      ).toLocaleDateString("en-IN")
+                      : "—"}
+                  </strong>
+
+                </div>
+
+              </div>
+
+              {/* PRIZE POOL */}
+
+              <div className="subscription-detail">
+
+                <Trophy size={18} />
+
+                <div>
+
+                  <span>
+                    Prize Pool
+                  </span>
+
+                  <strong>
+                    {subscription.subscription_plans
+                      ?.prize_pool_percentage || 0}
+                    %
+                  </strong>
+
+                </div>
+
+              </div>
+
+              {/* CHARITY */}
+
+              <div className="subscription-detail">
+
+                <Heart size={18} />
+
+                <div>
+
+                  <span>
+                    Minimum Charity Contribution
+                  </span>
+
+                  <strong>
+                    {subscription.subscription_plans
+                      ?.minimum_charity_percentage ||
+                      10}
+                    %
+                  </strong>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </Card>
+
+          {/* INFO */}
+
+          <div className="subscription-info-grid">
+
+            <Card>
+
+              <div className="info-icon">
+                <CheckCircle2 size={22} />
+              </div>
+
+              <h3>
+                Draw Participation
+              </h3>
+
+              <p>
+                Your active subscription makes you
+                eligible for the monthly draw using
+                your latest five Stableford scores.
+              </p>
+
+            </Card>
+
+            <Card>
+
+              <div className="info-icon">
+                <Heart size={22} />
+              </div>
+
+              <h3>
+                Charity Contribution
+              </h3>
+
+              <p>
+                Your selected charity receives your
+                configured contribution percentage
+                from the subscription.
+              </p>
+
+            </Card>
+
+          </div>
+
+        </>
+      )}
+
     </div>
   );
 };

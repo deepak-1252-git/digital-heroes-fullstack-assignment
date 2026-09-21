@@ -1,0 +1,496 @@
+/* ================================
+   DRAW MANAGEMENT PAGE
+================================ */
+
+.draws-page {
+  min-height: 100vh;
+  background: #080808;
+  color: #ffffff;
+  padding: 40px 24px;
+}
+
+.draws-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+
+/* ================================
+   HEADER
+================================ */
+
+.draws-header {
+  margin-bottom: 40px;
+}
+
+.draws-eyebrow {
+  margin: 0 0 8px;
+  color: #a3e635;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.draws-header h1 {
+  margin: 0;
+  font-size: 38px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.draws-description {
+  margin: 10px 0 0;
+  color: #9ca3af;
+  font-size: 15px;
+}
+
+
+/* ================================
+   ALERTS
+================================ */
+
+.draws-alert {
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+.draws-alert p {
+  margin: 0;
+}
+
+.draws-alert-error {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+}
+
+.draws-alert-success {
+  background: rgba(163, 230, 53, 0.1);
+  border: 1px solid rgba(163, 230, 53, 0.2);
+  color: #bef264;
+}
+
+
+/* ================================
+   COMMON CARD
+================================ */
+
+.draws-card {
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.draws-card h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.draws-card-title {
+  margin-bottom: 20px !important;
+}
+
+
+/* ================================
+   CONTROLS
+================================ */
+
+.draws-controls {
+  margin-bottom: 24px;
+}
+
+.draws-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.draws-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draws-field label {
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.draws-field input,
+.draws-field select {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #080808;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease,
+              box-shadow 0.2s ease;
+}
+
+.draws-field input:focus,
+.draws-field select:focus {
+  border-color: #a3e635;
+  box-shadow: 0 0 0 3px rgba(163, 230, 53, 0.08);
+}
+
+.draws-field select option {
+  background: #111111;
+  color: #ffffff;
+}
+
+
+/* ================================
+   BUTTONS
+================================ */
+
+.draws-primary-btn,
+.draws-publish-btn {
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease,
+              transform 0.2s ease,
+              opacity 0.2s ease;
+}
+
+.draws-primary-btn {
+  margin-top: 24px;
+  padding: 13px 24px;
+  border-radius: 10px;
+  background: #a3e635;
+  color: #080808;
+}
+
+.draws-primary-btn:hover,
+.draws-publish-btn:hover {
+  background: #bef264;
+  transform: translateY(-1px);
+}
+
+.draws-primary-btn:disabled,
+.draws-publish-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
+/* ================================
+   SIMULATION
+================================ */
+
+.draws-simulation {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.draws-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.draws-result-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.draws-simulated-badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.1);
+  color: #facc15;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.draws-section-label {
+  margin: 0 0 14px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.draws-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.draw-number {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #a3e635;
+  color: #080808;
+
+  font-size: 20px;
+  font-weight: 700;
+}
+
+
+/* ================================
+   STATS
+================================ */
+
+.draws-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.draws-stat-card {
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.draws-stat-card p {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.draws-stat-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 28px;
+  line-height: 1;
+}
+
+
+/* ================================
+   MATCH BREAKDOWN
+================================ */
+
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  padding: 16px;
+
+  background: #080808;
+  border-radius: 12px;
+}
+
+.match-info p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.match-info span {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.match-values {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.match-percentage {
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.match-values strong {
+  min-width: 24px;
+  text-align: right;
+  font-size: 16px;
+}
+
+
+/* ================================
+   PUBLISH CARD
+================================ */
+
+.draws-publish-card {
+  padding: 24px;
+
+  background: rgba(163, 230, 53, 0.08);
+  border: 1px solid rgba(163, 230, 53, 0.2);
+  border-radius: 16px;
+}
+
+.draws-publish-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.draws-publish-content h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.draws-publish-content p {
+  margin: 6px 0 0;
+  max-width: 600px;
+  color: #9ca3af;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.draws-publish-btn {
+  flex-shrink: 0;
+  padding: 13px 28px;
+  border-radius: 10px;
+  background: #a3e635;
+  color: #080808;
+  font-size: 14px;
+}
+
+
+/* ================================
+   RESPONSIVE
+================================ */
+
+@media (max-width: 900px) {
+
+  .draws-page {
+    padding: 32px 20px;
+  }
+
+  .draws-header h1 {
+    font-size: 32px;
+  }
+
+  .draws-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .draws-publish-content {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .draws-publish-btn {
+    width: 100%;
+  }
+}
+
+
+@media (max-width: 600px) {
+
+  .draws-page {
+    padding: 24px 16px;
+  }
+
+  .draws-header {
+    margin-bottom: 28px;
+  }
+
+  .draws-header h1 {
+    font-size: 28px;
+  }
+
+  .draws-description {
+    font-size: 14px;
+  }
+
+  .draws-card,
+  .draws-publish-card {
+    padding: 18px;
+  }
+
+  .draws-controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .draws-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .draws-stat-card {
+    padding: 16px;
+  }
+
+  .draws-stat-card strong {
+    font-size: 24px;
+  }
+
+  .draws-result-header {
+    align-items: flex-start;
+  }
+
+  .draws-result-header h2 {
+    font-size: 18px;
+  }
+
+  .draw-number {
+    width: 48px;
+    height: 48px;
+    font-size: 17px;
+  }
+
+  .match-row {
+    padding: 14px;
+  }
+
+  .match-values {
+    gap: 14px;
+  }
+
+  .match-info p {
+    font-size: 14px;
+  }
+}
+
+
+@media (max-width: 420px) {
+
+  .draws-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .draws-result-header {
+    flex-direction: column;
+  }
+
+  .draws-simulated-badge {
+    align-self: flex-start;
+  }
+
+  .match-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .match-values {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

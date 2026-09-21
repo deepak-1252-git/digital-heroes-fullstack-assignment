@@ -2,19 +2,27 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
-// import DashboardLayout from "./layouts/DashboardLayout";
 import UserLayout from "./layouts/UserLayout";
+import AdminLayout from "./layouts/AdminLayout";
+import PublicLayout from "./layouts/PublicLayout";
 
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import Users from "./pages/admin/Users";
+import AdminUsers from "./pages/admin/Users";
+import AdminSubscriptions from "./pages/admin/Subscriptions";
+import AdminScores from "./pages/admin/Scores";
 import AdminDraws from "./pages/admin/Draws";
-import Winners from "./pages/admin/Winners";
-import Charities from "./pages/admin/Charities";
+import AdminCharities from "./pages/admin/Charities";
+import AdminWinners from "./pages/admin/Winners";
+import AdminAnalytics from "./pages/admin/Analytics";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 
 import Home from "./pages/public/Home";
+import HowItWorks from "./pages/public/HowItWorks";
+import Charities from "./pages/public/Charities";
+import CharityDetail from "./pages/public/CharityDetail";
+import Pricing from "./pages/public/Pricing";
 
 import Overview from "./pages/user/Overview";
 import Scores from "./pages/user/Scores";
@@ -31,9 +39,19 @@ function App() {
       <Routes>
 
         {/* Public */}
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Home />} />
+
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/charities" element={<Charities />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/charities/:id" element={<CharityDetail />} />
+
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          
+        </Route>
+
 
         {/* User Dashboard */}
         <Route
@@ -55,30 +73,24 @@ function App() {
 
         </Route>
 
+        {/* Admin Dashboard */}
         <Route
           path="/admin"
-          element={<AdminDashboard />}
-        />
-
-        <Route
-          path="/admin/users"
-          element={<Users />}
-        />
-
-        <Route
-          path="/admin/draws"
-          element={<AdminDraws />}
-        />
-
-        <Route
-          path="/admin/winners"
-          element={<Winners />}
-        />
-
-        <Route
-          path="/admin/charities"
-          element={<Charities />}
-        />
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="subscriptions" element={<AdminSubscriptions />} />
+          <Route path="scores" element={<AdminScores />} />
+          <Route path="draws" element={<AdminDraws />} />
+          <Route path="charities" element={<AdminCharities />} />
+          <Route path="winners" element={<AdminWinners />} />
+          <Route path="analytics" element={<AdminAnalytics />} />
+        </Route>
 
       </Routes>
 

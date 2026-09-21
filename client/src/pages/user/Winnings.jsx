@@ -1,402 +1,597 @@
 import { useEffect, useState } from "react";
+import {
+  Trophy,
+  CalendarDays,
+  IndianRupee,
+  ShieldCheck,
+  Clock3,
+  AlertCircle,
+  Upload,
+} from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
 
+import Card from "../../components/Card/Card";
+import Loader from "../../components/Loader/Loader";
+
+import "./Winnings.css";
+
 const Winnings = () => {
-    const [winners, setWinners] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [uploading, setUploading] = useState(null);
+  const [winnings, setWinnings] = useState([]);
 
-    const loadWinnings = async () => {
-        try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [uploadingId, setUploadingId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
 
-            if (!user) return;
 
-            const { data, error } = await supabase
-                .from("winners")
-                .select(`
+  useEffect(() => {
+    loadWinnings();
+  }, []);
+
+  const loadWinnings = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      // --------------------------------
+      // Get logged-in user
+      // --------------------------------
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        setError("Please login to view your winnings.");
+        return;
+      }
+
+      // --------------------------------
+      // Get user's winnings
+      // --------------------------------
+      const { data, error: winningsError } = await supabase
+        .from("winners")
+        .select(`
           id,
+          draw_id,
+          user_id,
           match_count,
           prize_amount,
-          verification_status,
-          payout_status,
           created_at,
+
           draws (
+            id,
             draw_month,
-            numbers
+            numbers,
+            published_at
           ),
+
           winner_proofs (
             id,
             file_url,
             status,
-            admin_note,
+            created_at
+          ),
+
+          payouts (
+            id,
+            amount,
+            status,
+            paid_at,
             created_at
           )
         `)
-                .eq("user_id", user.id)
-                .order("created_at", {
-                    ascending: false,
-                });
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-            if (error) throw error;
+      if (winningsError) {
+        throw winningsError;
+      }
 
-            setWinners(data || []);
-        } catch (error) {
-            console.error(error);
-            alert(error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+      setWinnings(data || []);
+    } catch (err) {
+      console.error("Winnings loading error:", err);
 
-    useEffect(() => {
-        loadWinnings();
-    }, []);
+      setError(
+        err.message || "Unable to load your winnings."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const uploadProof = async (winnerId, file) => {
-        if (!file) return;
 
-        if (!file.type.startsWith("image/")) {
-            alert("Please upload an image.");
-            return;
-        }
+  // --------------------------------
+  //  winning proofe
+  // --------------------------------
+  const handleProofUpload = async (winning, file) => {
+    if (!file) return;
 
-        if (file.size > 6 * 1024 * 1024) {
-            alert("Image must be smaller than 6MB.");
-            return;
-        }
+    try {
+      setUploadingId(winning.id);
+      setError("");
+      setSuccessMessage("");
 
-        try {
-            setUploading(winnerId);
+      // -----------------------------
+      // Validate file type
+      // -----------------------------
 
-            const fileExt = file.name.split(".").pop();
+      const allowedTypes = [
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+      ];
 
-            const filePath =
-                `${winnerId}/${crypto.randomUUID()}.${fileExt}`;
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error(
+          "Please upload a PNG, JPG, or WEBP image."
+        );
+      }
 
-            const { error: uploadError } = await supabase.storage
-                .from("winner-proofs")
-                .upload(filePath, file, {
-                    contentType: file.type,
-                    upsert: false,
-                });
+      // -----------------------------
+      // Validate file size
+      // Maximum: 5 MB
+      // -----------------------------
 
-            if (uploadError) throw uploadError;
+      const maxSize = 5 * 1024 * 1024;
 
-            const {
-                data: { publicUrl },
-            } = supabase.storage
-                .from("winner-proofs")
-                .getPublicUrl(filePath);
+      if (file.size > maxSize) {
+        throw new Error(
+          "Proof image must be smaller than 5 MB."
+        );
+      }
 
-            const { error: dbError } = await supabase
-                .from("winner_proofs")
-                .insert({
-                    winner_id: winnerId,
-                    file_url: publicUrl,
-                    status: "pending",
-                });
+      // -----------------------------
+      // Get logged-in user
+      // -----------------------------
 
-            if (dbError) throw dbError;
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-            alert("Proof uploaded successfully.");
+      if (authError) {
+        throw authError;
+      }
 
-            await loadWinnings();
+      if (!user) {
+        throw new Error(
+          "Please login before uploading proof."
+        );
+      }
 
-        } catch (error) {
-            console.error(error);
-            alert(error.message);
-        } finally {
-            setUploading(null);
-        }
-    };
+      // -----------------------------
+      // Create safe file name
+      // -----------------------------
 
-    if (loading) {
-        return <div style={styles.center}>Loading winnings...</div>;
+      const extension =
+        file.name.split(".").pop()?.toLowerCase() || "jpg";
+
+      const fileName = `${winning.id}-${Date.now()}.${extension}`;
+
+      const filePath = `${user.id}/${fileName}`;
+
+      // -----------------------------
+      // Upload to Storage
+      // -----------------------------
+
+      const { error: uploadError } = await supabase.storage
+        .from("winner-proofs")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // -----------------------------
+      // Save proof record
+      // -----------------------------
+
+      const { error: proofError } = await supabase
+        .from("winner_proofs")
+        .insert({
+          winner_id: winning.id,
+          file_url: filePath,
+          status: "pending",
+        });
+
+      if (proofError) {
+        // If DB insert fails, remove uploaded file
+        await supabase.storage
+          .from("winner-proofs")
+          .remove([filePath]);
+
+        throw proofError;
+      }
+
+      setSuccessMessage(
+        "Your winning proof has been uploaded successfully."
+      );
+
+      // Reload winnings
+      await loadWinnings();
+
+    } catch (err) {
+      console.error("Proof upload error:", err);
+
+      setError(
+        err.message ||
+        "Unable to upload your winning proof."
+      );
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  // --------------------------------
+  // Match label
+  // --------------------------------
+  const getMatchLabel = (matchCount) => {
+    if (matchCount === 5) {
+      return "5 Number Jackpot";
     }
 
+    if (matchCount === 4) {
+      return "4 Number Match";
+    }
+
+    if (matchCount === 3) {
+      return "3 Number Match";
+    }
+
+    return `${matchCount} Number Match`;
+  };
+
+  // --------------------------------
+  // Proof status
+  // --------------------------------
+  const getProofStatus = (winning) => {
+    const proof = winning.winner_proofs?.[0];
+
+    if (!proof) {
+      return {
+        label: "Proof Required",
+        type: "pending",
+      };
+    }
+
+    if (proof.status === "approved") {
+      return {
+        label: "Proof Approved",
+        type: "approved",
+      };
+    }
+
+    if (proof.status === "rejected") {
+      return {
+        label: "Proof Rejected",
+        type: "rejected",
+      };
+    }
+
+    return {
+      label: "Proof Pending",
+      type: "pending",
+    };
+  };
+
+  // --------------------------------
+  // Payout status
+  // --------------------------------
+  const getPayoutStatus = (winning) => {
+    const payout = winning.payouts?.[0];
+
+    if (!payout) {
+      return "Pending";
+    }
+
+    return payout.status || "Pending";
+  };
+
+  if (loading) {
     return (
-        <div style={styles.page}>
+      <div className="winnings-page">
+        <Loader />
+      </div>
+    );
+  }
 
-            <div style={styles.header}>
-                <p style={styles.eyebrow}>YOUR RESULTS</p>
+  return (
+    <div className="winnings-page">
 
-                <h1 style={styles.headerTitle}>Winnings</h1>
+      {/* =================================
+          HEADER
+      ================================= */}
 
-                <p style={styles.headerText}>
-                    View your prizes and submit verification proof.
-                </p>
+      <div className="winnings-header">
+
+        <div>
+          <span className="winnings-eyebrow">
+            <Trophy size={16} />
+            YOUR REWARDS
+          </span>
+
+          <h1>Winnings</h1>
+
+          <p>
+            View your draw winnings, submit proof,
+            and track your payout status.
+          </p>
+        </div>
+
+      </div>
+
+      {/* =================================
+          ERROR
+      ================================= */}
+
+      {error && (
+        <div className="winnings-message error">
+          <AlertCircle size={18} />
+
+          <span>{error}</span>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="winnings-message success">
+          <ShieldCheck size={18} />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {/* =================================
+          EMPTY STATE
+      ================================= */}
+
+      {!error && winnings.length === 0 && (
+        <Card>
+          <div className="empty-winnings">
+
+            <div className="empty-icon">
+              <Trophy size={30} />
             </div>
 
-            {winners.length === 0 ? (
-                <div style={styles.empty}>
-                    No winnings yet.
-                </div>
-            ) : (
-                <div style={styles.list}>
+            <h2>No winnings yet</h2>
 
-                    {winners.map((winner) => {
-                        const proof = winner.winner_proofs?.[0];
+            <p>
+              Your winning entries will appear here
+              when you match 3 or more draw numbers.
+            </p>
+          </div>
+        </Card>
+      )}
 
-                        return (
-                            <div
-                                key={winner.id}
-                                style={styles.card}
-                            >
+      {/* =================================
+          WINNINGS LIST
+      ================================= */}
 
-                                <div style={styles.top}>
+      {winnings.length > 0 && (
+        <div className="winnings-list">
 
-                                    <div>
-                                        <span style={styles.match}>
-                                            {winner.match_count}-MATCH
-                                        </span>
+          {winnings.map((winning) => {
+            const draw = winning.draws;
+            const proofStatus = getProofStatus(winning);
+            const payoutStatus = getPayoutStatus(winning);
 
-                                        <h2>
-                                            ₹{Number(
-                                                winner.prize_amount || 0
-                                            ).toLocaleString("en-IN")}
-                                        </h2>
+            const winningNumbers = Array.isArray(
+              draw?.numbers
+            )
+              ? draw.numbers
+              : [];
 
-                                        <p>
-                                            Draw:{" "}
-                                            {winner.draws?.draw_month}
-                                        </p>
-                                    </div>
+            return (
+              <Card
+                key={winning.id}
+                className="winning-card"
+              >
 
-                                    <div>
-                                        <span
-                                            style={{
-                                                ...styles.badge,
-                                                ...(winner.verification_status ===
-                                                    "approved"
-                                                    ? styles.approved
-                                                    : winner.verification_status ===
-                                                        "rejected"
-                                                        ? styles.rejected
-                                                        : {}),
-                                            }}
-                                        >
-                                            {winner.verification_status}
-                                        </span>
-                                    </div>
+                {/* Card Header */}
 
-                                </div>
+                <div className="winning-card-header">
 
+                  <div className="winning-title">
 
-                                <div style={styles.numbers}>
-                                    {(winner.draws?.numbers || []).map(
-                                        (number) => (
-                                            <span key={number}>
-                                                {number}
-                                            </span>
-                                        )
-                                    )}
-                                </div>
+                    <div className="winning-icon">
+                      <Trophy size={20} />
+                    </div>
 
+                    <div>
+                      <span>
+                        {getMatchLabel(
+                          winning.match_count
+                        )}
+                      </span>
 
-                                <div style={styles.divider} />
+                      <h2>
+                        {draw?.draw_month ||
+                          "Monthly Draw"}
+                      </h2>
+                    </div>
 
+                  </div>
 
-                                {proof ? (
-                                    <div style={styles.proof}>
+                  <div className="prize-amount">
+                    <span>Prize</span>
 
-                                        <p>
-                                            Proof status:{" "}
-                                            <strong>
-                                                {proof.status}
-                                            </strong>
-                                        </p>
-
-                                        <a
-                                            href={proof.file_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                        >
-                                            View submitted proof
-                                        </a>
-
-                                        {proof.admin_note && (
-                                            <p style={styles.note}>
-                                                Admin: {proof.admin_note}
-                                            </p>
-                                        )}
-
-                                    </div>
-                                ) : (
-                                    <label style={styles.upload}>
-
-                                        {uploading === winner.id
-                                            ? "Uploading..."
-                                            : "Upload Winner Proof"}
-
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            hidden
-                                            disabled={uploading === winner.id}
-                                            onChange={(e) =>
-                                                uploadProof(
-                                                    winner.id,
-                                                    e.target.files[0]
-                                                )
-                                            }
-                                        />
-
-                                    </label>
-                                )}
-
-
-                                <div style={styles.payout}>
-                                    <span>Payout</span>
-
-                                    <strong>
-                                        {winner.payout_status}
-                                    </strong>
-                                </div>
-
-                            </div>
-                        );
-                    })}
+                    <strong>
+                      ₹
+                      {Number(
+                        winning.prize_amount || 0
+                      ).toLocaleString("en-IN")}
+                    </strong>
+                  </div>
 
                 </div>
-            )}
+
+                {/* Draw Information */}
+
+                <div className="winning-info-grid">
+
+                  <div className="winning-info-item">
+
+                    <span>
+                      <CalendarDays size={15} />
+                      Draw Date
+                    </span>
+
+                    <strong>
+                      {draw?.published_at
+                        ? new Date(
+                          draw.published_at
+                        ).toLocaleDateString()
+                        : "—"}
+                    </strong>
+
+                  </div>
+
+                  <div className="winning-info-item">
+
+                    <span>
+                      <Trophy size={15} />
+                      Match
+                    </span>
+
+                    <strong>
+                      {winning.match_count} / 5
+                    </strong>
+
+                  </div>
+
+                  <div className="winning-info-item">
+
+                    <span>
+                      <IndianRupee size={15} />
+                      Payout
+                    </span>
+
+                    <strong>
+                      {payoutStatus}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+                {/* Winning Numbers */}
+
+                <div className="winning-numbers-section">
+
+                  <span className="numbers-label">
+                    Winning Numbers
+                  </span>
+
+                  <div className="winning-numbers">
+
+                    {winningNumbers.map(
+                      (number, index) => (
+                        <span
+                          key={`${number}-${index}`}
+                          className="winning-number"
+                        >
+                          {number}
+                        </span>
+                      )
+                    )}
+
+                  </div>
+
+                </div>
+
+                {/* Proof */}
+
+                <div className="proof-section">
+
+                  <div className="proof-header">
+
+                    <div>
+                      <span className="proof-label">
+                        <ShieldCheck size={15} />
+                        WINNER VERIFICATION
+                      </span>
+
+                      <h3>
+                        {proofStatus.label}
+                      </h3>
+                    </div>
+
+                    {!winning.winner_proofs?.length && (
+                      <>
+                        <input
+                          id={`proof-${winning.id}`}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          hidden
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+
+                            if (file) {
+                              handleProofUpload(winning, file);
+                            }
+
+                            event.target.value = "";
+                          }}
+                        />
+
+                        <label
+                          htmlFor={`proof-${winning.id}`}
+                          className={`proof-button ${uploadingId === winning.id
+                            ? "uploading"
+                            : ""
+                            }`}
+                        >
+                          <Upload size={16} />
+
+                          {uploadingId === winning.id
+                            ? "Uploading..."
+                            : "Upload Proof"}
+                        </label>
+                      </>
+                    )}
+
+                  </div>
+
+                  <p className="proof-description">
+                    Upload a screenshot showing your
+                    winning entry for admin verification.
+                  </p>
+
+                  <div
+                    className={`proof-status ${proofStatus.type}`}
+                  >
+                    {proofStatus.type === "approved" && (
+                      <ShieldCheck size={15} />
+                    )}
+
+                    {proofStatus.type === "pending" && (
+                      <Clock3 size={15} />
+                    )}
+
+                    <span>
+                      {proofStatus.label}
+                    </span>
+                  </div>
+
+                </div>
+
+              </Card>
+            );
+          })}
 
         </div>
-    );
-};
+      )}
 
-
-const styles = {
-    page: {
-        padding: "35px",
-        color: "#fff",
-    },
-
-    center: {
-        minHeight: "70vh",
-        display: "grid",
-        placeItems: "center",
-        color: "#aaa",
-    },
-
-    header: {
-        marginBottom: "30px",
-    },
-
-    eyebrow: {
-        color: "#a3e635",
-        fontSize: "12px",
-        fontWeight: 700,
-        letterSpacing: "2px",
-    },
-
-    headerTitle: {
-        fontSize: "38px",
-        margin: "8px 0",
-    },
-
-    headerText: {
-        color: "#888",
-    },
-
-    list: {
-        display: "grid",
-        gap: "20px",
-        maxWidth: "850px",
-    },
-
-    card: {
-        background: "#111313",
-        border: "1px solid #272929",
-        borderRadius: "18px",
-        padding: "25px",
-    },
-
-    top: {
-        display: "flex",
-        justifyContent: "space-between",
-        gap: "20px",
-    },
-
-    match: {
-        color: "#a3e635",
-        fontSize: "12px",
-        fontWeight: 700,
-        letterSpacing: "1px",
-    },
-
-    h2: {
-        fontSize: "30px",
-        margin: "8px 0",
-    },
-
-    p: {
-        color: "#888",
-    },
-
-    badge: {
-        background: "#292929",
-        color: "#aaa",
-        padding: "7px 12px",
-        borderRadius: "20px",
-        fontSize: "12px",
-        textTransform: "capitalize",
-    },
-
-    approved: {
-        background: "#243514",
-        color: "#a3e635",
-    },
-
-    rejected: {
-        background: "#3b2020",
-        color: "#ff7777",
-    },
-
-    numbers: {
-        display: "flex",
-        gap: "8px",
-        marginTop: "20px",
-    },
-
-    divider: {
-        height: "1px",
-        background: "#272929",
-        margin: "22px 0",
-    },
-
-    upload: {
-        display: "inline-block",
-        background: "#a3e635",
-        color: "#111",
-        padding: "11px 16px",
-        borderRadius: "9px",
-        fontWeight: 700,
-        cursor: "pointer",
-    },
-
-    proof: {
-        color: "#aaa",
-    },
-
-    note: {
-        color: "#e7a66a",
-    },
-
-    payout: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginTop: "22px",
-        color: "#999",
-    },
-
-    empty: {
-        padding: "50px",
-        textAlign: "center",
-        color: "#777",
-    },
+    </div>
+  );
 };
 
 export default Winnings;

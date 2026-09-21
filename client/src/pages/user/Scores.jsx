@@ -1,9 +1,26 @@
-import { useEffect, useState } from "react";
-import { CalendarDays, Pencil, Trash2, Plus } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CalendarDays,
+  Check,
+  Edit3,
+  Plus,
+  Target,
+  Trash2,
+  X,
+} from "lucide-react";
 
-export default function Scores() {
+import {supabase} from "../../lib/supabase";
+
+import Card from "../../components/Card/Card";
+import Badge from "../../components/Badge/Badge";
+import Loader from "../../components/Loader/Loader";
+
+import "./Scores.css";
+
+function Scores() {
+  const [user, setUser] = useState(null);
   const [scores, setScores] = useState([]);
+
   const [score, setScore] = useState("");
   const [playedAt, setPlayedAt] = useState("");
 
@@ -11,127 +28,67 @@ export default function Scores() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const today = new Date().toISOString().split("T")[0];
+
   useEffect(() => {
-    fetchScores();
+    loadScores();
   }, []);
 
-  const fetchScores = async () => {
-    setLoading(true);
-    setError("");
+  async function loadScores() {
+    try {
+      setLoading(true);
+      setError("");
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      setError("User session not found.");
-      setLoading(false);
-      return;
-    }
+      if (userError) {
+        throw userError;
+      }
 
-    const { data, error } = await supabase
-      .from("scores")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("played_at", { ascending: false })
-      .order("created_at", { ascending: false });
+      if (!user) {
+        throw new Error("You must be logged in.");
+      }
 
-    if (error) {
-      setError(error.message);
-    } else {
+      setUser(user);
+
+      const { data, error: scoresError } = await supabase
+        .from("scores")
+        .select("id, score, played_at, created_at")
+        .eq("user_id", user.id)
+        .order("played_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (scoresError) {
+        throw scoresError;
+      }
+
       setScores(data || []);
+    } catch (err) {
+      console.error("Load scores error:", err);
+      setError(err.message || "Unable to load scores.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    setLoading(false);
-  };
-
-  const resetForm = () => {
+  function resetForm() {
     setScore("");
     setPlayedAt("");
     setEditingId(null);
-  };
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    setError("");
-    setSuccess("");
-
-    const numericScore = Number(score);
-
-    // Score validation
-    if (!numericScore || numericScore < 1 || numericScore > 45) {
-      setError("Stableford score must be between 1 and 45.");
-      return;
-    }
-
-    if (!playedAt) {
-      setError("Please select a score date.");
-      return;
-    }
-
-    setSaving(true);
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setError("User session not found.");
-      setSaving(false);
-      return;
-    }
-
-    let result;
-
-    if (editingId) {
-      result = await supabase
-        .from("scores")
-        .update({
-          score: numericScore,
-          played_at: playedAt,
-        })
-        .eq("id", editingId)
-        .eq("user_id", user.id);
-    } else {
-      result = await supabase
-        .from("scores")
-        .insert({
-          user_id: user.id,
-          score: numericScore,
-          played_at: playedAt,
-        });
-    }
-
-    if (result.error) {
-      if (result.error.code === "23505") {
-        setError("A score already exists for this date.");
-      } else {
-        setError(result.error.message);
-      }
-
-      setSaving(false);
-      return;
-    }
-
-    setSuccess(
-      editingId
-        ? "Score updated successfully."
-        : "Score added successfully."
-    );
-
-    resetForm();
-    await fetchScores();
-
-    setSaving(false);
-  };
-
-  const handleEdit = (item) => {
+  function startEdit(item) {
     setEditingId(item.id);
-    setScore(item.score);
+    setScore(String(item.score));
     setPlayedAt(item.played_at);
 
     setError("");
@@ -141,246 +98,469 @@ export default function Scores() {
       top: 0,
       behavior: "smooth",
     });
-  };
+  }
 
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this score?"
+  function validateForm() {
+    const numericScore = Number(score);
+
+    if (!score) {
+      return "Please enter your Stableford score.";
+    }
+
+    if (!Number.isInteger(numericScore)) {
+      return "Score must be a whole number.";
+    }
+
+    if (numericScore < 1 || numericScore > 45) {
+      return "Stableford score must be between 1 and 45.";
+    }
+
+    if (!playedAt) {
+      return "Please select the date you played.";
+    }
+
+    if (playedAt > today) {
+      return "Score date cannot be in the future.";
+    }
+
+    const duplicate = scores.some(
+      (item) =>
+        item.played_at === playedAt &&
+        item.id !== editingId
     );
 
-    if (!confirmed) return;
+    if (duplicate) {
+      return "You already have a score for this date.";
+    }
+
+    return null;
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
 
     setError("");
     setSuccess("");
 
-    const { error } = await supabase
-      .from("scores")
-      .delete()
-      .eq("id", id);
+    const validationError = validateForm();
 
-    if (error) {
-      setError(error.message);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    setSuccess("Score deleted successfully.");
-    await fetchScores();
-  };
+    try {
+      setSaving(true);
 
-  const formatDate = (date) => {
-    return new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
+      if (editingId) {
+        const { error: updateError } = await supabase
+          .from("scores")
+          .update({
+            score: Number(score),
+            played_at: playedAt,
+          })
+          .eq("id", editingId)
+          .eq("user_id", user.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        setSuccess("Score updated successfully.");
+      } else {
+        const { error: insertError } = await supabase
+          .from("scores")
+          .insert({
+            user_id: user.id,
+            score: Number(score),
+            played_at: playedAt,
+          });
+
+        if (insertError) {
+          if (insertError.code === "23505") {
+            throw new Error(
+              "You already have a score for this date."
+            );
+          }
+
+          throw insertError;
+        }
+
+        setSuccess("Score added successfully.");
+      }
+
+      resetForm();
+      await loadScores();
+    } catch (err) {
+      console.error("Save score error:", err);
+      setError(err.message || "Unable to save score.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id) {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this score?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      setError("");
+      setSuccess("");
+
+      const { error: deleteError } = await supabase
+        .from("scores")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      setSuccess("Score deleted successfully.");
+
+      if (editingId === id) {
+        resetForm();
+      }
+
+      await loadScores();
+    } catch (err) {
+      console.error("Delete score error:", err);
+      setError(err.message || "Unable to delete score.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const averageScore = useMemo(() => {
+    if (!scores.length) {
+      return 0;
+    }
+
+    const total = scores.reduce(
+      (sum, item) => sum + Number(item.score),
+      0
+    );
+
+    return Math.round((total / scores.length) * 10) / 10;
+  }, [scores]);
+
+  const latestScore = scores[0]?.score || "--";
+
+  if (loading) {
+    return (
+      <div className="scores-loading">
+        <Loader />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="scores-page">
 
       {/* Header */}
-      <div>
-        <p className="text-sm text-lime-400 font-medium">
-          PERFORMANCE
-        </p>
+      <div className="scores-header">
+        <div>
+          <span className="scores-eyebrow">
+            PERFORMANCE
+          </span>
 
-        <h1 className="text-3xl font-bold mt-1">
-          Golf Scores
-        </h1>
+          <h1>Your Scores</h1>
 
-        <p className="text-gray-500 mt-2">
-          Keep your latest five Stableford scores ready for the monthly draw.
-        </p>
+          <p>
+            Keep your latest Stableford scores updated.
+            Your five latest scores form your draw combination.
+          </p>
+        </div>
       </div>
 
-      {/* Form */}
-      <div className="bg-[#0d0e0e] border border-white/10 rounded-2xl p-6">
+      {/* Stats */}
+      <section className="scores-stats">
 
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 rounded-xl bg-lime-400/10 text-lime-400">
-            <Plus size={20} />
+        <Card className="score-stat">
+          <div className="score-stat-icon">
+            <Target size={21} />
           </div>
 
           <div>
-            <h2 className="font-semibold text-lg">
-              {editingId ? "Edit Score" : "Add New Score"}
-            </h2>
-
-            <p className="text-sm text-gray-500">
-              Stableford score must be between 1 and 45.
-            </p>
+            <span>Scores Recorded</span>
+            <strong>{scores.length}/5</strong>
           </div>
+        </Card>
+
+        <Card className="score-stat">
+          <div className="score-stat-icon">
+            <Check size={21} />
+          </div>
+
+          <div>
+            <span>Average Score</span>
+            <strong>
+              {scores.length ? averageScore : "--"}
+            </strong>
+          </div>
+        </Card>
+
+        <Card className="score-stat">
+          <div className="score-stat-icon">
+            <CalendarDays size={21} />
+          </div>
+
+          <div>
+            <span>Latest Score</span>
+            <strong>{latestScore}</strong>
+          </div>
+        </Card>
+
+      </section>
+
+      {/* Messages */}
+      {error && (
+        <div className="scores-message scores-error">
+          <X size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="scores-message scores-success">
+          <Check size={18} />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Add / Edit */}
+      <Card className="score-form-card">
+
+        <div className="score-form-heading">
+          <div>
+            <span className="scores-eyebrow">
+              {editingId ? "UPDATE SCORE" : "ADD SCORE"}
+            </span>
+
+            <h2>
+              {editingId
+                ? "Edit your score"
+                : "Record a new score"}
+            </h2>
+          </div>
+
+          {editingId && (
+            <button
+              type="button"
+              className="cancel-edit-btn"
+              onClick={resetForm}
+            >
+              <X size={16} />
+              Cancel
+            </button>
+          )}
         </div>
 
         <form
+          className="score-form"
           onSubmit={handleSubmit}
-          className="grid grid-cols-1 md:grid-cols-3 gap-4"
         >
-
-          {/* Score */}
-          <div>
-            <label className="text-sm text-gray-400">
+          <div className="score-form-field">
+            <label htmlFor="stableford-score">
               Stableford Score
             </label>
 
             <input
+              id="stableford-score"
               type="number"
               min="1"
               max="45"
+              step="1"
               value={score}
-              onChange={(e) => setScore(e.target.value)}
-              placeholder="e.g. 32"
-              className="w-full mt-2 px-4 py-3 rounded-xl bg-black border border-white/10 outline-none focus:border-lime-400"
+              onChange={(event) => {
+                setScore(event.target.value);
+                setError("");
+                setSuccess("");
+              }}
+              placeholder="e.g. 36"
             />
+
+            <small>
+              Enter a score between 1 and 45.
+            </small>
           </div>
 
-          {/* Date */}
-          <div>
-            <label className="text-sm text-gray-400">
-              Score Date
+          <div className="score-form-field">
+            <label htmlFor="played-date">
+              Played Date
             </label>
 
             <input
+              id="played-date"
               type="date"
+              max={today}
               value={playedAt}
-              onChange={(e) => setPlayedAt(e.target.value)}
-              className="w-full mt-2 px-4 py-3 rounded-xl bg-black border border-white/10 outline-none focus:border-lime-400"
+              onChange={(event) => {
+                setPlayedAt(event.target.value);
+                setError("");
+                setSuccess("");
+              }}
             />
+
+            <small>
+              Only one score is allowed per date.
+            </small>
           </div>
 
-          {/* Button */}
-          <div className="flex items-end gap-3">
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-5 py-3 rounded-xl bg-lime-400 text-black font-semibold hover:bg-lime-300 disabled:opacity-50 transition"
-            >
-              {saving
-                ? "Saving..."
-                : editingId
-                ? "Update Score"
-                : "Add Score"}
-            </button>
-
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="px-5 py-3 rounded-xl bg-white/5 text-gray-300 hover:bg-white/10"
-              >
-                Cancel
-              </button>
+          <button
+            type="submit"
+            className="save-score-btn"
+            disabled={saving}
+          >
+            {saving ? (
+              "Saving..."
+            ) : editingId ? (
+              <>
+                <Check size={18} />
+                Update Score
+              </>
+            ) : (
+              <>
+                <Plus size={18} />
+                Add Score
+              </>
             )}
-
-          </div>
-
+          </button>
         </form>
 
-        {/* Messages */}
-        {error && (
-          <div className="mt-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            {error}
-          </div>
-        )}
+      </Card>
 
-        {success && (
-          <div className="mt-4 px-4 py-3 rounded-xl bg-lime-400/10 border border-lime-400/20 text-lime-400 text-sm">
-            {success}
-          </div>
-        )}
+      {/* Score History */}
+      <Card className="score-history-card">
 
-      </div>
-
-      {/* Scores */}
-      <div>
-
-        <div className="flex items-center justify-between mb-4">
+        <div className="score-history-heading">
           <div>
-            <h2 className="text-xl font-semibold">
-              Your Latest Scores
-            </h2>
+            <span className="scores-eyebrow">
+              SCORE HISTORY
+            </span>
 
-            <p className="text-sm text-gray-500 mt-1">
-              {scores.length} of 5 scores stored
-            </p>
+            <h2>Latest 5 Scores</h2>
           </div>
+
+          <Badge>
+            {scores.length}/5 recorded
+          </Badge>
         </div>
 
-        {loading ? (
-          <div className="text-gray-500">
-            Loading scores...
-          </div>
-        ) : scores.length === 0 ? (
-          <div className="border border-dashed border-white/10 rounded-2xl p-10 text-center">
-            <CalendarDays
-              size={32}
-              className="mx-auto text-gray-600"
-            />
+        {scores.length === 0 ? (
+          <div className="scores-empty">
 
-            <p className="text-gray-400 mt-4">
-              No golf scores yet.
-            </p>
+            <div className="scores-empty-icon">
+              <Target size={32} />
+            </div>
 
-            <p className="text-gray-600 text-sm mt-1">
+            <h3>No scores recorded yet</h3>
+
+            <p>
               Add your first Stableford score above.
             </p>
+
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="scores-table">
+
+            <div className="scores-table-header">
+              <span>Score</span>
+              <span>Date</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
 
             {scores.map((item, index) => (
               <div
+                className="scores-table-row"
                 key={item.id}
-                className="bg-[#0d0e0e] border border-white/10 rounded-2xl p-5 flex items-center justify-between"
               >
+                <div className="table-score">
+                  <span>{item.score}</span>
 
-                <div className="flex items-center gap-4">
-
-                  <div className="w-12 h-12 rounded-xl bg-lime-400/10 text-lime-400 flex items-center justify-center font-bold">
-                    {item.score}
-                  </div>
-
-                  <div>
-                    <p className="font-medium">
-                      Stableford Score
-                    </p>
-
-                    <p className="text-sm text-gray-500">
-                      {formatDate(item.played_at)}
-                    </p>
-                  </div>
-
+                  {index === 0 && (
+                    <Badge>Latest</Badge>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="table-date">
+                  <CalendarDays size={16} />
+
+                  {new Date(
+                    `${item.played_at}T00:00:00`
+                  ).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </div>
+
+                <div>
+                  <span className="recorded-status">
+                    <Check size={14} />
+                    Recorded
+                  </span>
+                </div>
+
+                <div className="score-actions">
 
                   <button
-                    onClick={() => handleEdit(item)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5"
-                    title="Edit"
+                    type="button"
+                    title="Edit score"
+                    onClick={() => startEdit(item)}
                   >
-                    <Pencil size={17} />
+                    <Edit3 size={16} />
                   </button>
 
                   <button
+                    type="button"
+                    title="Delete score"
+                    className="delete-score-btn"
+                    disabled={deletingId === item.id}
                     onClick={() => handleDelete(item.id)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/5"
-                    title="Delete"
                   >
-                    <Trash2 size={17} />
+                    <Trash2 size={16} />
                   </button>
 
                 </div>
-
               </div>
             ))}
 
           </div>
         )}
 
+      </Card>
+
+      {/* Draw info */}
+      <div className="score-draw-info">
+
+        <div className="score-draw-info-icon">
+          <Target size={24} />
+        </div>
+
+        <div>
+          <strong>
+            Your 5 scores power your draw entry
+          </strong>
+
+          <p>
+            Keep five recent scores recorded to create
+            your monthly draw combination.
+          </p>
+        </div>
+
       </div>
 
     </div>
   );
 }
+
+export default Scores;

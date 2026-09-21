@@ -1,0 +1,577 @@
+/* =========================================
+   WINNINGS PAGE
+========================================= */
+
+.winnings-page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+/* =========================================
+   HEADER
+========================================= */
+
+.winnings-header {
+  margin-bottom: 32px;
+}
+
+.winnings-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  margin-bottom: 10px;
+
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.winnings-header h1 {
+  margin: 0;
+
+  color: var(--text-primary);
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.winnings-header p {
+  max-width: 620px;
+  margin: 12px 0 0;
+
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* =========================================
+   MESSAGE
+========================================= */
+
+.winnings-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin-bottom: 24px;
+  padding: 14px 16px;
+
+  border-radius: 12px;
+
+  font-size: 14px;
+}
+
+.winnings-message.error {
+  border: 1px solid rgba(255, 80, 80, 0.2);
+
+  background: rgba(255, 80, 80, 0.08);
+
+  color: #ff8a8a;
+}
+
+.winnings-message.success {
+  border: 1px solid rgba(170, 255, 80, 0.2);
+
+  background: rgba(170, 255, 80, 0.08);
+
+  color: var(--primary);
+}
+
+.proof-button.uploading {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+/* =========================================
+   EMPTY STATE
+========================================= */
+
+.empty-winnings {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+
+  padding: 60px 20px;
+
+  text-align: center;
+}
+
+.empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 64px;
+  height: 64px;
+
+  margin-bottom: 18px;
+
+  border: 1px solid rgba(170, 255, 80, 0.18);
+  border-radius: 18px;
+
+  background: rgba(170, 255, 80, 0.08);
+
+  color: var(--primary);
+}
+
+.empty-winnings h2 {
+  margin: 0 0 8px;
+
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.empty-winnings p {
+  max-width: 440px;
+  margin: 0;
+
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* =========================================
+   WINNINGS LIST
+========================================= */
+
+.winnings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* =========================================
+   WINNING CARD
+========================================= */
+
+.winning-card {
+  overflow: hidden;
+}
+
+/* =========================================
+   CARD HEADER
+========================================= */
+
+.winning-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 24px;
+
+  padding-bottom: 24px;
+
+  border-bottom: 1px solid var(--border-color);
+}
+
+.winning-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.winning-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 46px;
+  height: 46px;
+
+  flex-shrink: 0;
+
+  border: 1px solid rgba(170, 255, 80, 0.2);
+  border-radius: 13px;
+
+  background: rgba(170, 255, 80, 0.08);
+
+  color: var(--primary);
+}
+
+.winning-title > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.winning-title span {
+  color: var(--text-secondary);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.winning-title h2 {
+  margin: 0;
+
+  color: var(--text-primary);
+
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.prize-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+
+  gap: 4px;
+}
+
+.prize-amount span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.prize-amount strong {
+  color: var(--primary);
+
+  font-size: 24px;
+  font-weight: 800;
+}
+
+/* =========================================
+   WINNING INFO
+========================================= */
+
+.winning-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 12px;
+
+  margin-top: 20px;
+}
+
+.winning-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  padding: 14px;
+
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.winning-info-item span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: var(--text-secondary);
+
+  font-size: 11px;
+}
+
+.winning-info-item strong {
+  color: var(--text-primary);
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* =========================================
+   WINNING NUMBERS
+========================================= */
+
+.winning-numbers-section {
+  margin-top: 24px;
+}
+
+.numbers-label {
+  display: block;
+
+  margin-bottom: 10px;
+
+  color: var(--text-secondary);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.winning-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.winning-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  height: 42px;
+
+  border: 1px solid rgba(170, 255, 80, 0.2);
+  border-radius: 11px;
+
+  background: rgba(170, 255, 80, 0.08);
+
+  color: var(--primary);
+
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* =========================================
+   PROOF SECTION
+========================================= */
+
+.proof-section {
+  margin-top: 26px;
+  padding-top: 24px;
+
+  border-top: 1px solid var(--border-color);
+}
+
+.proof-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.proof-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  margin-bottom: 7px;
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 1.2px;
+}
+
+.proof-header h3 {
+  margin: 0;
+
+  color: var(--text-primary);
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.proof-description {
+  max-width: 650px;
+
+  margin: 10px 0 16px;
+
+  color: var(--text-secondary);
+
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* =========================================
+   PROOF BUTTON
+========================================= */
+
+.proof-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 10px 15px;
+
+  border: 1px solid rgba(170, 255, 80, 0.25);
+  border-radius: 10px;
+
+  background: rgba(170, 255, 80, 0.09);
+
+  color: var(--primary);
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.proof-button:hover {
+  border-color: rgba(170, 255, 80, 0.45);
+
+  background: rgba(170, 255, 80, 0.15);
+
+  transform: translateY(-1px);
+}
+
+.proof-button:active {
+  transform: translateY(0);
+}
+
+/* =========================================
+   PROOF STATUS
+========================================= */
+
+.proof-status {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 7px;
+
+  padding: 7px 11px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.proof-status.pending {
+  border: 1px solid rgba(255, 193, 7, 0.18);
+
+  background: rgba(255, 193, 7, 0.08);
+
+  color: #e6b94c;
+}
+
+.proof-status.approved {
+  border: 1px solid rgba(170, 255, 80, 0.2);
+
+  background: rgba(170, 255, 80, 0.08);
+
+  color: var(--primary);
+}
+
+.proof-status.rejected {
+  border: 1px solid rgba(255, 80, 80, 0.2);
+
+  background: rgba(255, 80, 80, 0.08);
+
+  color: #ff8a8a;
+}
+
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 850px) {
+  .winnings-page {
+    padding: 28px 22px;
+  }
+
+  .winning-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .winning-info-item:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 600px) {
+  .winnings-page {
+    padding: 24px 16px;
+  }
+
+  .winnings-header {
+    margin-bottom: 26px;
+  }
+
+  .winnings-header h1 {
+    font-size: 30px;
+  }
+
+  .winnings-header p {
+    font-size: 13px;
+  }
+
+  .winning-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+
+    gap: 18px;
+  }
+
+  .prize-amount {
+    align-items: flex-start;
+  }
+
+  .prize-amount strong {
+    font-size: 21px;
+  }
+
+  .winning-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .winning-info-item:last-child {
+    grid-column: auto;
+  }
+
+  .proof-header {
+    align-items: flex-start;
+    flex-direction: column;
+
+    gap: 14px;
+  }
+
+  .proof-button {
+    width: 100%;
+  }
+
+  .empty-winnings {
+    padding: 45px 15px;
+  }
+}
+
+/* =========================================
+   SMALL MOBILE
+========================================= */
+
+@media (max-width: 400px) {
+  .winnings-page {
+    padding: 20px 12px;
+  }
+
+  .winning-title {
+    gap: 10px;
+  }
+
+  .winning-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .winning-title h2 {
+    font-size: 17px;
+  }
+
+  .winning-number {
+    width: 38px;
+    height: 38px;
+
+    border-radius: 9px;
+  }
+}

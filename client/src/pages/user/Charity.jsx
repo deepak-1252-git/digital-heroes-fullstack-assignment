@@ -1,391 +1,427 @@
 import { useEffect, useMemo, useState } from "react";
-import { Heart, Search, Check, Loader2 } from "lucide-react";
+import {
+  Check,
+  Heart,
+  Search,
+  Sparkles,
+} from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
 
-export default function Charity() {
-  const [charities, setCharities] = useState([]);
+import Card from "../../components/Card/Card";
+import Loader from "../../components/Loader/Loader";
+
+import "./Charity.css";
+
+function Charity() {
+  const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [charities, setCharities] = useState([]);
+  const [subscription, setSubscription] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
+  const [charityPercentage, setCharityPercentage] =
+    useState(10);
 
-  const [selectedCharity, setSelectedCharity] = useState("");
-  const [percentage, setPercentage] = useState(10);
+  const [selectedCharityId, setSelectedCharityId] =
+    useState(null);
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [savingCharity, setSavingCharity] = useState(false);
+  const [savingPercentage, setSavingPercentage] =
+    useState(false);
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     loadCharityData();
   }, []);
 
-  const loadCharityData = async () => {
-    setLoading(true);
-    setError("");
+  async function loadCharityData() {
+    try {
+      setLoading(true);
+      setError("");
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      setError("User session not found.");
-      setLoading(false);
-      return;
-    }
+      if (userError) {
+        throw userError;
+      }
 
-    // Get active charities
-    const { data: charityData, error: charityError } =
-      await supabase
+      if (!user) {
+        throw new Error("You must be logged in.");
+      }
+
+      setUser(user);
+
+      // Profile
+      const { data: profileData, error: profileError } =
+        await supabase
+          .from("profiles")
+          .select(`
+            id,
+            full_name,
+            selected_charity_id,
+            charity_percentage
+          `)
+          .eq("id", user.id)
+          .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      setProfile(profileData);
+
+      setSelectedCharityId(
+        profileData.selected_charity_id || null
+      );
+
+      setCharityPercentage(
+        profileData.charity_percentage || 10
+      );
+
+      // Active charities
+      const {
+        data: charityData,
+        error: charityError,
+      } = await supabase
         .from("charities")
-        .select("*")
+        .select(`
+          id,
+          name,
+          description,
+          image_url,
+          active
+        `)
         .eq("active", true)
-        .order("featured", { ascending: false })
         .order("name", { ascending: true });
 
-    if (charityError) {
-      setError(charityError.message);
+      if (charityError) {
+        throw charityError;
+      }
+
+      setCharities(charityData || []);
+
+      // Latest subscription
+      const {
+        data: subscriptionData,
+        error: subscriptionError,
+      } = await supabase
+        .from("subscriptions")
+        .select(`
+          id,
+          status,
+          subscription_plans (
+            name,
+            price,
+            billing_interval
+          )
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subscriptionError) {
+        console.error(
+          "Subscription error:",
+          subscriptionError
+        );
+      } else {
+        setSubscription(subscriptionData);
+      }
+    } catch (err) {
+      console.error("Charity page error:", err);
+
+      setError(
+        err.message || "Unable to load charity data."
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Get user's profile
-    const { data: profileData, error: profileError } =
-      await supabase
-        .from("profiles")
-        .select("id, selected_charity_id, charity_percentage")
-        .eq("id", user.id)
-        .single();
-
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    setCharities(charityData || []);
-    setProfile(profileData);
-
-    setSelectedCharity(profileData?.selected_charity_id || "");
-    setPercentage(profileData?.charity_percentage || 10);
-
-    setLoading(false);
-  };
-
-  const categories = useMemo(() => {
-    const uniqueCategories = [
-      ...new Set(
-        charities
-          .map((charity) => charity.category)
-          .filter(Boolean)
-      ),
-    ];
-
-    return ["All", ...uniqueCategories];
-  }, [charities]);
+  }
 
   const filteredCharities = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
+      return charities;
+    }
+
     return charities.filter((charity) => {
-      const matchesSearch =
-        charity.name
-          ?.toLowerCase()
-          .includes(search.toLowerCase()) ||
+      return (
+        charity.name?.toLowerCase().includes(query) ||
         charity.description
           ?.toLowerCase()
-          .includes(search.toLowerCase());
-
-      const matchesCategory =
-        category === "All" ||
-        charity.category === category;
-
-      return matchesSearch && matchesCategory;
-    });
-  }, [charities, search, category]);
-
-  const handleSave = async () => {
-    setError("");
-    setMessage("");
-
-    if (!selectedCharity) {
-      setError("Please select a charity.");
-      return;
-    }
-
-    const numericPercentage = Number(percentage);
-
-    if (
-      numericPercentage < 10 ||
-      numericPercentage > 100
-    ) {
-      setError(
-        "Charity contribution must be between 10% and 100%."
+          .includes(query)
       );
-      return;
-    }
+    });
+  }, [charities, search]);
 
-    setSaving(true);
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setError("User session not found.");
-      setSaving(false);
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        selected_charity_id: selectedCharity,
-        charity_percentage: numericPercentage,
-      })
-      .eq("id", user.id);
-
-    if (updateError) {
-      setError(updateError.message);
-      setSaving(false);
-      return;
-    }
-
-    setProfile((prev) => ({
-      ...prev,
-      selected_charity_id: selectedCharity,
-      charity_percentage: numericPercentage,
-    }));
-
-    setMessage("Your charity preferences have been saved.");
-    setSaving(false);
-  };
-
-  const selectedCharityData = charities.find(
-    (charity) => charity.id === selectedCharity
+  const selectedCharity = charities.find(
+    (charity) => charity.id === selectedCharityId
   );
+
+  const subscriptionPrice =
+    subscription?.subscription_plans?.price || 0;
+
+  const estimatedContribution =
+    (Number(subscriptionPrice) *
+      Number(charityPercentage)) /
+    100;
+
+  async function handleSelectCharity(charityId) {
+    try {
+      setSavingCharity(true);
+      setError("");
+      setSuccess("");
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          selected_charity_id: charityId,
+        })
+        .eq("id", user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setSelectedCharityId(charityId);
+
+      setProfile((previous) => ({
+        ...previous,
+        selected_charity_id: charityId,
+      }));
+
+      setSuccess("Your charity has been updated.");
+    } catch (err) {
+      console.error(
+        "Select charity error:",
+        err
+      );
+
+      setError(
+        err.message || "Unable to update charity."
+      );
+    } finally {
+      setSavingCharity(false);
+    }
+  }
+
+  async function handlePercentageChange(value) {
+    const percentage = Number(value);
+
+    if (percentage < 10 || percentage > 100) {
+      return;
+    }
+
+    try {
+      setSavingPercentage(true);
+      setError("");
+      setSuccess("");
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          charity_percentage: percentage,
+        })
+        .eq("id", user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setCharityPercentage(percentage);
+
+      setProfile((previous) => ({
+        ...previous,
+        charity_percentage: percentage,
+      }));
+
+      setSuccess(
+        `Your charity contribution is now ${percentage}%.`
+      );
+    } catch (err) {
+      console.error(
+        "Percentage update error:",
+        err
+      );
+
+      setError(
+        err.message ||
+        "Unable to update contribution percentage."
+      );
+    } finally {
+      setSavingPercentage(false);
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="animate-spin text-lime-400" />
+      <div className="charity-loading">
+        <Loader />
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="charity-page">
 
       {/* Header */}
-      <div>
-        <p className="text-sm text-lime-400 font-medium">
-          YOUR IMPACT
-        </p>
+      <header className="charity-page-header">
 
-        <h1 className="text-3xl font-bold mt-1">
-          Choose Your Charity
-        </h1>
+        <div>
+          <span className="charity-eyebrow">
+            YOUR IMPACT
+          </span>
 
-        <p className="text-gray-500 mt-2 max-w-2xl">
-          Your subscription can support a charity you care about.
-          Choose where your contribution goes and decide how much
-          of your subscription you want to dedicate.
-        </p>
-      </div>
+          <h1>
+            Play with purpose.
+          </h1>
 
-      {/* Current selection */}
-      {selectedCharityData && (
-        <div className="rounded-2xl border border-lime-400/20 bg-lime-400/5 p-6">
-
-          <div className="flex items-start justify-between gap-5">
-
-            <div className="flex gap-4">
-
-              <div className="w-12 h-12 rounded-xl bg-lime-400/10 flex items-center justify-center text-lime-400">
-                <Heart size={22} fill="currentColor" />
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-500">
-                  Currently supporting
-                </p>
-
-                <h2 className="text-xl font-semibold mt-1">
-                  {selectedCharityData.name}
-                </h2>
-
-                <p className="text-gray-400 text-sm mt-1">
-                  {percentage}% contribution
-                </p>
-              </div>
-
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2 text-lime-400 text-sm">
-              <Check size={17} />
-              Selected
-            </div>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* Search / Filter */}
-      <div className="flex flex-col md:flex-row gap-4">
-
-        <div className="relative flex-1">
-
-          <Search
-            size={19}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"
-          />
-
-          <input
-            type="text"
-            placeholder="Search charities..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 rounded-xl bg-[#0d0e0e] border border-white/10 outline-none focus:border-lime-400"
-          />
-
-        </div>
-
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="px-4 py-3 rounded-xl bg-[#0d0e0e] border border-white/10 outline-none focus:border-lime-400 text-gray-300"
-        >
-          {categories.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-
-      </div>
-
-      {/* Charity cards */}
-      {filteredCharities.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-white/10 rounded-2xl">
-          <Heart
-            size={32}
-            className="mx-auto text-gray-600"
-          />
-
-          <p className="text-gray-400 mt-4">
-            No charities found.
+          <p>
+            Every subscription can support a cause you
+            care about. Choose where your impact goes.
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
 
-          {filteredCharities.map((charity) => {
-            const isSelected =
-              selectedCharity === charity.id;
+        <div className="charity-header-icon">
+          <Heart size={30} />
+        </div>
 
-            return (
-              <button
-                key={charity.id}
-                type="button"
-                onClick={() =>
-                  setSelectedCharity(charity.id)
-                }
-                className={`text-left rounded-2xl overflow-hidden border transition ${
-                  isSelected
-                    ? "border-lime-400 ring-1 ring-lime-400"
-                    : "border-white/10 hover:border-white/20"
-                }`}
-              >
+      </header>
 
-                {/* Image */}
-                <div className="h-40 bg-gradient-to-br from-lime-400/10 to-white/5 flex items-center justify-center">
-
-                  {charity.image_url ? (
-                    <img
-                      src={charity.image_url}
-                      alt={charity.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Heart
-                      size={42}
-                      className="text-lime-400/40"
-                    />
-                  )}
-
-                </div>
-
-                {/* Content */}
-                <div className="p-5 bg-[#0d0e0e]">
-
-                  <div className="flex items-start justify-between gap-3">
-
-                    <div>
-                      <h3 className="font-semibold text-lg">
-                        {charity.name}
-                      </h3>
-
-                      {charity.category && (
-                        <span className="inline-block mt-2 px-2.5 py-1 rounded-full bg-white/5 text-xs text-gray-400">
-                          {charity.category}
-                        </span>
-                      )}
-                    </div>
-
-                    {isSelected && (
-                      <div className="w-7 h-7 rounded-full bg-lime-400 text-black flex items-center justify-center">
-                        <Check size={16} />
-                      </div>
-                    )}
-
-                  </div>
-
-                  <p className="text-sm text-gray-500 mt-4 line-clamp-3">
-                    {charity.description ||
-                      "Supporting meaningful change through charitable impact."}
-                  </p>
-
-                </div>
-
-              </button>
-            );
-          })}
-
+      {/* Messages */}
+      {error && (
+        <div className="charity-message charity-error">
+          {error}
         </div>
       )}
 
-      {/* Contribution */}
-      <div className="rounded-2xl border border-white/10 bg-[#0d0e0e] p-6">
+      {success && (
+        <div className="charity-message charity-success">
+          <Check size={17} />
+          {success}
+        </div>
+      )}
 
-        <div className="flex items-center gap-3 mb-6">
+      {/* Current Impact */}
+      <section className="charity-impact-grid">
 
-          <div className="p-3 rounded-xl bg-lime-400/10 text-lime-400">
-            <Heart size={20} />
+        <Card className="current-charity-card">
+
+          <div className="card-label">
+            CURRENT CHARITY
           </div>
 
+          {selectedCharity ? (
+            <div className="current-charity-content">
+
+              {selectedCharity.image_url ? (
+                <img
+                  src={selectedCharity.image_url}
+                  alt={selectedCharity.name}
+                  className="current-charity-logo"
+                />
+              ) : (
+                <div className="current-charity-icon">
+                  <Heart size={25} />
+                </div>
+              )}
+
+              <div>
+                <h2>
+                  {selectedCharity.name}
+                </h2>
+
+                <p>
+                  {selectedCharity.description ||
+                    "Your chosen charity partner."}
+                </p>
+              </div>
+
+            </div>
+          ) : (
+            <div className="no-charity-selected">
+              <Heart size={28} />
+
+              <h2>
+                No charity selected
+              </h2>
+
+              <p>
+                Choose a charity below to start directing
+                your contribution.
+              </p>
+            </div>
+          )}
+
+        </Card>
+
+        <Card className="contribution-card">
+
+          <div className="card-label">
+            YOUR CONTRIBUTION
+          </div>
+
+          <div className="contribution-value">
+            {charityPercentage}%
+          </div>
+
+          <p>
+            of your subscription goes towards your
+            selected charity.
+          </p>
+
+          {subscriptionPrice > 0 && (
+            <div className="estimated-contribution">
+              <span>Estimated per billing cycle</span>
+
+              <strong>
+                ₹{estimatedContribution.toFixed(2)}
+              </strong>
+            </div>
+          )}
+
+        </Card>
+
+      </section>
+
+      {/* Contribution Control */}
+      <Card className="contribution-control-card">
+
+        <div className="control-heading">
           <div>
-            <h2 className="text-lg font-semibold">
-              Your Contribution
+            <span className="charity-eyebrow">
+              CONTRIBUTION
+            </span>
+
+            <h2>
+              Choose your impact level
             </h2>
 
-            <p className="text-sm text-gray-500">
-              Choose the percentage of your subscription you want
-              to contribute.
+            <p>
+              The minimum contribution is 10%. You can
+              increase it whenever you want.
             </p>
           </div>
 
+          <div className="percentage-display">
+            {charityPercentage}%
+          </div>
         </div>
 
-        <div className="max-w-xl">
+        <div className="range-wrapper">
 
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-gray-400">
-              Contribution{" "}
-            </span>
-
-            <span className="text-2xl font-bold text-lime-400">
-              {percentage}%
-            </span>
+          <div className="range-labels">
+            <span>10%</span>
+            <span>100%</span>
           </div>
 
           <input
@@ -393,42 +429,190 @@ export default function Charity() {
             min="10"
             max="100"
             step="5"
-            value={percentage}
-            onChange={(e) =>
-              setPercentage(Number(e.target.value))
+            value={charityPercentage}
+            onChange={(event) =>
+              setCharityPercentage(
+                Number(event.target.value)
+              )
             }
-            className="w-full accent-lime-400"
+            onMouseUp={(event) =>
+              handlePercentageChange(
+                event.target.value
+              )
+            }
+            onTouchEnd={(event) =>
+              handlePercentageChange(
+                event.target.value
+              )
+            }
+            disabled={savingPercentage}
+            className="charity-range"
           />
 
-          <div className="flex justify-between text-xs text-gray-600 mt-2">
-            <span>10% minimum</span>
-            <span>100%</span>
+          <div className="range-current">
+            {savingPercentage
+              ? "Saving..."
+              : `Currently contributing ${charityPercentage}%`}
           </div>
 
         </div>
 
-        {error && (
-          <div className="mt-5 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            {error}
+      </Card>
+
+      {/* Charity Directory */}
+      <section className="charity-directory">
+
+        <div className="directory-header">
+
+          <div>
+            <span className="charity-eyebrow">
+              CHARITY DIRECTORY
+            </span>
+
+            <h2>
+              Choose your charity
+            </h2>
+
+            <p>
+              Select the organisation you want your
+              contribution to support.
+            </p>
+          </div>
+
+          <div className="charity-search">
+            <Search size={18} />
+
+            <input
+              type="text"
+              placeholder="Search charities..."
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+            />
+          </div>
+
+        </div>
+
+        {filteredCharities.length === 0 ? (
+          <div className="charity-empty">
+            <Search size={28} />
+
+            <h3>
+              No charities found
+            </h3>
+
+            <p>
+              Try searching with another name or keyword.
+            </p>
+          </div>
+        ) : (
+          <div className="charity-grid">
+
+            {filteredCharities.map((charity) => {
+              const isSelected =
+                charity.id === selectedCharityId;
+
+              return (
+                <Card
+                  key={charity.id}
+                  className={`charity-option-card ${isSelected
+                      ? "charity-option-selected"
+                      : ""
+                    }`}
+                >
+
+                  <div className="charity-option-top">
+
+                    {charity.image_url ? (
+                      <img
+                        src={charity.image_url}
+                        alt={charity.name}
+                        className="charity-option-logo"
+                      />
+                    ) : (
+                      <div className="charity-option-icon">
+                        <Heart size={24} />
+                      </div>
+                    )}
+
+                    {isSelected && (
+                      <span className="selected-check">
+                        <Check size={15} />
+                      </span>
+                    )}
+
+                  </div>
+
+                  <h3>
+                    {charity.name}
+                  </h3>
+
+                  <p>
+                    {charity.description ||
+                      "Support this cause through your subscription."}
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={
+                      isSelected || savingCharity
+                    }
+                    className={
+                      isSelected
+                        ? "selected-charity-btn"
+                        : "select-charity-btn"
+                    }
+                    onClick={() =>
+                      handleSelectCharity(charity.id)
+                    }
+                  >
+                    {isSelected ? (
+                      <>
+                        <Check size={17} />
+                        Selected
+                      </>
+                    ) : savingCharity ? (
+                      "Saving..."
+                    ) : (
+                      <>
+                        <Heart size={17} />
+                        Select Charity
+                      </>
+                    )}
+                  </button>
+
+                </Card>
+              );
+            })}
+
           </div>
         )}
 
-        {message && (
-          <div className="mt-5 p-4 rounded-xl bg-lime-400/10 border border-lime-400/20 text-lime-400 text-sm">
-            {message}
-          </div>
-        )}
+      </section>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="mt-6 px-6 py-3 rounded-xl bg-lime-400 text-black font-semibold hover:bg-lime-300 disabled:opacity-50 transition"
-        >
-          {saving ? "Saving..." : "Save Charity Preferences"}
-        </button>
+      {/* Bottom message */}
+      <div className="charity-purpose-banner">
+
+        <div className="purpose-icon">
+          <Sparkles size={23} />
+        </div>
+
+        <div>
+          <strong>
+            Your game can create real impact.
+          </strong>
+
+          <p>
+            Every contribution helps support the cause
+            you choose while you enjoy the game.
+          </p>
+        </div>
 
       </div>
 
     </div>
   );
 }
+
+export default Charity;

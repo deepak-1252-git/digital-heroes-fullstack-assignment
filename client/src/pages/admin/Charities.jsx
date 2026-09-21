@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import "./Charities.css";
 
 const Charities = () => {
   const [charities, setCharities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const loadCharities = async () => {
     try {
+      setError("");
+
       const { data, error } = await supabase
         .from("charities")
         .select("*")
@@ -18,8 +25,10 @@ const Charities = () => {
 
       setCharities(data || []);
     } catch (error) {
-      console.error(error);
-      alert(error.message);
+      console.error("Load charities error:", error);
+      setError(
+        error.message || "Failed to load charities."
+      );
     } finally {
       setLoading(false);
     }
@@ -27,6 +36,10 @@ const Charities = () => {
 
   const toggleCharity = async (charity) => {
     try {
+      setUpdatingId(charity.id);
+      setError("");
+      setSuccess("");
+
       const { error } = await supabase
         .from("charities")
         .update({
@@ -36,9 +49,31 @@ const Charities = () => {
 
       if (error) throw error;
 
-      await loadCharities();
+      setCharities((currentCharities) =>
+        currentCharities.map((item) =>
+          item.id === charity.id
+            ? {
+                ...item,
+                active: !charity.active,
+              }
+            : item
+        )
+      );
+
+      setSuccess(
+        `${charity.name} ${
+          charity.active ? "disabled" : "enabled"
+        } successfully.`
+      );
     } catch (error) {
-      alert(error.message);
+      console.error("Toggle charity error:", error);
+
+      setError(
+        error.message ||
+          "Failed to update charity status."
+      );
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -48,211 +83,158 @@ const Charities = () => {
 
   if (loading) {
     return (
-      <div style={styles.center}>
-        Loading charities...
+      <div className="charities-loading">
+        <div className="charities-loader"></div>
+        <p>Loading charities...</p>
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
+    <div className="charities-page">
 
-      <div style={styles.header}>
-        <div>
-          <p style={styles.eyebrow}>
-            ADMIN PANEL
-          </p>
+      <div className="charities-container">
 
-          <h1>Charities</h1>
+        {/* Header */}
+        <div className="charities-header">
 
-          <p style={styles.subtitle}>
-            Manage charities available to subscribers.
-          </p>
+          <div>
+            <p className="charities-eyebrow">
+              ADMIN PANEL
+            </p>
+
+            <h1>
+              Charities
+            </h1>
+
+            <p className="charities-subtitle">
+              Manage charities available to subscribers.
+            </p>
+          </div>
+
+          <div className="charities-count">
+            <span>Total</span>
+            <strong>{charities.length}</strong>
+          </div>
+
         </div>
-      </div>
 
-      <div style={styles.grid}>
+        {/* Error */}
+        {error && (
+          <div className="charities-alert charities-alert-error">
+            {error}
+          </div>
+        )}
 
-        {charities.map((charity) => (
-          <div
-            key={charity.id}
-            style={styles.card}
-          >
+        {/* Success */}
+        {success && (
+          <div className="charities-alert charities-alert-success">
+            {success}
+          </div>
+        )}
 
-            {charity.image_url && (
-              <img
-                src={charity.image_url}
-                alt={charity.name}
-                style={styles.image}
-              />
-            )}
+        {/* Empty */}
+        {charities.length === 0 ? (
+          <div className="charities-empty">
+            <h2>No charities found</h2>
 
-            <div style={styles.cardBody}>
+            <p>
+              There are currently no charities available.
+            </p>
+          </div>
+        ) : (
+          <div className="charities-grid">
 
-              <div style={styles.cardTop}>
-                <h2>{charity.name}</h2>
-
-                <span
-                  style={{
-                    ...styles.status,
-                    ...(charity.active
-                      ? styles.active
-                      : styles.inactive),
-                  }}
-                >
-                  {charity.active
-                    ? "Active"
-                    : "Inactive"}
-                </span>
-              </div>
-
-              <p style={styles.description}>
-                {charity.description ||
-                  "No description available."}
-              </p>
-
-              <div style={styles.meta}>
-                {charity.category || "General"}
-              </div>
-
-              <button
-                style={
-                  charity.active
-                    ? styles.disable
-                    : styles.enable
-                }
-                onClick={() =>
-                  toggleCharity(charity)
-                }
+            {charities.map((charity) => (
+              <div
+                key={charity.id}
+                className="charity-card"
               >
-                {charity.active
-                  ? "Disable"
-                  : "Enable"}
-              </button>
 
-            </div>
+                {/* Image */}
+                {charity.image_url ? (
+                  <div className="charity-image-wrapper">
+                    <img
+                      src={charity.image_url}
+                      alt={charity.name}
+                      className="charity-image"
+                    />
+                  </div>
+                ) : (
+                  <div className="charity-image-placeholder">
+                    <span>
+                      {charity.name
+                        ?.charAt(0)
+                        ?.toUpperCase() || "C"}
+                    </span>
+                  </div>
+                )}
+
+                {/* Body */}
+                <div className="charity-card-body">
+
+                  <div className="charity-card-top">
+
+                    <h2>
+                      {charity.name}
+                    </h2>
+
+                    <span
+                      className={`charity-status ${
+                        charity.active
+                          ? "charity-status-active"
+                          : "charity-status-inactive"
+                      }`}
+                    >
+                      {charity.active
+                        ? "Active"
+                        : "Inactive"}
+                    </span>
+
+                  </div>
+
+                  <p className="charity-description">
+                    {charity.description ||
+                      "No description available."}
+                  </p>
+
+                  <div className="charity-meta">
+                    {charity.category || "General"}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={
+                      updatingId === charity.id
+                    }
+                    className={`charity-toggle-btn ${
+                      charity.active
+                        ? "charity-disable-btn"
+                        : "charity-enable-btn"
+                    }`}
+                    onClick={() =>
+                      toggleCharity(charity)
+                    }
+                  >
+                    {updatingId === charity.id
+                      ? "Updating..."
+                      : charity.active
+                      ? "Disable Charity"
+                      : "Enable Charity"}
+                  </button>
+
+                </div>
+
+              </div>
+            ))}
 
           </div>
-        ))}
+        )}
 
       </div>
 
     </div>
   );
-};
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    padding: "35px",
-    background: "#080909",
-    color: "#fff",
-  },
-
-  center: {
-    minHeight: "80vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#080909",
-    color: "#fff",
-  },
-
-  header: {
-    marginBottom: "30px",
-  },
-
-  eyebrow: {
-    color: "#a3e635",
-    fontSize: "12px",
-    fontWeight: 700,
-    letterSpacing: "2px",
-  },
-
-  subtitle: {
-    color: "#888",
-  },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "20px",
-  },
-
-  card: {
-    background: "#111313",
-    border: "1px solid #252727",
-    borderRadius: "18px",
-    overflow: "hidden",
-  },
-
-  image: {
-    width: "100%",
-    height: "160px",
-    objectFit: "cover",
-  },
-
-  cardBody: {
-    padding: "20px",
-  },
-
-  cardTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "10px",
-    alignItems: "flex-start",
-  },
-
-  description: {
-    color: "#888",
-    lineHeight: 1.5,
-  },
-
-  meta: {
-    display: "inline-block",
-    background: "#202222",
-    color: "#aaa",
-    padding: "5px 9px",
-    borderRadius: "15px",
-    fontSize: "11px",
-  },
-
-  status: {
-    fontSize: "11px",
-    padding: "5px 9px",
-    borderRadius: "20px",
-  },
-
-  active: {
-    background: "#243514",
-    color: "#a3e635",
-  },
-
-  inactive: {
-    background: "#302020",
-    color: "#ff7777",
-  },
-
-  disable: {
-    marginTop: "18px",
-    padding: "9px 14px",
-    borderRadius: "8px",
-    border: "1px solid #5a3030",
-    background: "#251919",
-    color: "#ff7777",
-    cursor: "pointer",
-  },
-
-  enable: {
-    marginTop: "18px",
-    padding: "9px 14px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#a3e635",
-    color: "#111",
-    cursor: "pointer",
-    fontWeight: 700,
-  },
 };
 
 export default Charities;

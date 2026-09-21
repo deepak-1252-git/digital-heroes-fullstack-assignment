@@ -1,47 +1,91 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Search,
+  Shield,
+  UserRound,
+  Mail,
+  CalendarDays,
+  Heart,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+} from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
+import Loader from "../../components/Loader/Loader";
+import Badge from "../../components/Badge/Badge";
 
-const API_URL =
-  import.meta.env.VITE_API_URL;
+import "./Users.css";
 
-const Users = () => {
+function formatDate(date) {
+  if (!date) return "—";
+
+  return new Date(date).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getRoleLabel(role) {
+  return role === "admin" ? "Administrator" : "Subscriber";
+}
+
+export default function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadUsers = async () => {
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+
+  const [updatingId, setUpdatingId] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const loadUsers = async (isRefresh = false) => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        throw new Error("Please login");
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
-      const response = await fetch(
-        `${API_URL}/api/admin/users`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${session.access_token}`,
-          },
-        }
+      setError("");
+      setSuccess("");
+
+      const { data, error: queryError } = await supabase
+        .from("profiles")
+        .select(`
+          id,
+          full_name,
+          email,
+          role,
+          selected_charity_id,
+          charity_percentage,
+          created_at,
+          charities (
+            id,
+            name
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (queryError) {
+        throw queryError;
+      }
+
+      setUsers(data || []);
+    } catch (err) {
+      console.error("ADMIN USERS ERROR:", err);
+
+      setError(
+        err.message || "Unable to load users."
       );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to load users"
-        );
-      }
-
-      setUsers(result.users || []);
-    } catch (error) {
-      console.error(error);
-      alert(error.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -49,205 +93,355 @@ const Users = () => {
     loadUsers();
   }, []);
 
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const matchesSearch =
+        !query ||
+        user.full_name?.toLowerCase().includes(query) ||
+        user.email?.toLowerCase().includes(query);
+
+      const matchesRole =
+        roleFilter === "all" ||
+        user.role === roleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [users, search, roleFilter]);
+
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      setUpdatingId(userId);
+      setError("");
+      setSuccess("");
+
+      const {
+        data: { user: currentUser },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!currentUser) {
+        throw new Error("Admin session not found.");
+      }
+
+      if (currentUser.id === userId && newRole !== "admin") {
+        throw new Error(
+          "You cannot remove your own admin role."
+        );
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          role: newRole,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setUsers((currentUsers) =>
+        currentUsers.map((user) =>
+          user.id === userId
+            ? {
+                ...user,
+                role: newRole,
+              }
+            : user
+        )
+      );
+
+      setSuccess("User role updated successfully.");
+    } catch (err) {
+      console.error("ROLE UPDATE ERROR:", err);
+
+      setError(
+        err.message || "Unable to update user role."
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   if (loading) {
     return (
-      <div style={styles.center}>
-        Loading users...
+      <div className="admin-users-page">
+        <Loader />
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
-
-      <div style={styles.header}>
+    <div className="admin-users-page">
+      <div className="admin-users-header">
         <div>
-          <p style={styles.eyebrow}>ADMIN PANEL</p>
+          <span className="admin-page-eyebrow">
+            Administration
+          </span>
 
           <h1>Users</h1>
 
-          <p style={styles.subtitle}>
-            Manage registered platform users.
+          <p>
+            Manage registered subscribers and administrator
+            accounts.
           </p>
         </div>
 
-        <div style={styles.count}>
-          {users.length} Users
-        </div>
+        <button
+          type="button"
+          className="users-refresh-button"
+          onClick={() => loadUsers(true)}
+          disabled={refreshing}
+        >
+          <RefreshCw
+            size={17}
+            className={refreshing ? "spin" : ""}
+          />
+
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
       </div>
 
-      <div style={styles.table}>
-
-        <div style={styles.tableHeader}>
-          <span>User</span>
-          <span>Email</span>
-          <span>Role</span>
-          <span>Charity</span>
-          <span>Joined</span>
+      {error && (
+        <div className="users-alert users-alert-error">
+          <AlertCircle size={18} />
+          <span>{error}</span>
         </div>
+      )}
 
-        {users.map((user) => (
-          <div
-            key={user.id}
-            style={styles.row}
-          >
+      {success && (
+        <div className="users-alert users-alert-success">
+          <CheckCircle2 size={18} />
+          <span>{success}</span>
+        </div>
+      )}
 
-            <div style={styles.user}>
-              <div style={styles.avatar}>
-                {(user.full_name || "U")
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-
-              <strong>
-                {user.full_name || "Unnamed User"}
-              </strong>
-            </div>
-
-            <span style={styles.muted}>
-              {user.email}
-            </span>
-
-            <span
-              style={{
-                ...styles.badge,
-                ...(user.role === "admin"
-                  ? styles.admin
-                  : {}),
-              }}
-            >
-              {user.role}
-            </span>
-
-            <span style={styles.muted}>
-              {user.charity_percentage || 10}%
-            </span>
-
-            <span style={styles.muted}>
-              {new Date(
-                user.created_at
-              ).toLocaleDateString("en-IN")}
-            </span>
-
+      <div className="users-summary">
+        <div className="users-summary-card">
+          <div className="users-summary-icon">
+            <UsersIcon />
           </div>
-        ))}
 
+          <div>
+            <strong>{users.length}</strong>
+            <span>Total Users</span>
+          </div>
+        </div>
+
+        <div className="users-summary-card">
+          <div className="users-summary-icon">
+            <UserRound size={19} />
+          </div>
+
+          <div>
+            <strong>
+              {users.filter(
+                (user) => user.role === "subscriber"
+              ).length}
+            </strong>
+            <span>Subscribers</span>
+          </div>
+        </div>
+
+        <div className="users-summary-card">
+          <div className="users-summary-icon">
+            <Shield size={19} />
+          </div>
+
+          <div>
+            <strong>
+              {users.filter(
+                (user) => user.role === "admin"
+              ).length}
+            </strong>
+            <span>Administrators</span>
+          </div>
+        </div>
       </div>
 
+      <div className="users-toolbar">
+        <div className="users-search">
+          <Search size={18} />
+
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
+          />
+        </div>
+
+        <div className="users-filter">
+          <ChevronDown size={16} />
+
+          <select
+            value={roleFilter}
+            onChange={(event) =>
+              setRoleFilter(event.target.value)
+            }
+          >
+            <option value="all">All Roles</option>
+            <option value="subscriber">Subscribers</option>
+            <option value="admin">Administrators</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="users-result-count">
+        Showing <strong>{filteredUsers.length}</strong> of{" "}
+        <strong>{users.length}</strong> users
+      </div>
+
+      {filteredUsers.length === 0 ? (
+        <div className="users-empty">
+          <UserRound size={32} />
+
+          <h3>No users found</h3>
+
+          <p>
+            Try changing your search or role filter.
+          </p>
+        </div>
+      ) : (
+        <div className="users-table-card">
+          <div className="users-table-wrapper">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Charity</th>
+                  <th>Contribution</th>
+                  <th>Joined</th>
+                  <th>Manage</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td>
+                      <div className="user-info">
+                        <div className="user-avatar">
+                          {user.full_name
+                            ?.charAt(0)
+                            ?.toUpperCase() || "U"}
+                        </div>
+
+                        <div className="user-details">
+                          <strong>
+                            {user.full_name || "Unnamed User"}
+                          </strong>
+
+                          <span>
+                            <Mail size={13} />
+                            {user.email || "No email"}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <Badge
+                        variant={
+                          user.role === "admin"
+                            ? "success"
+                            : "default"
+                        }
+                      >
+                        {user.role === "admin" ? (
+                          <Shield size={13} />
+                        ) : (
+                          <UserRound size={13} />
+                        )}
+
+                        {getRoleLabel(user.role)}
+                      </Badge>
+                    </td>
+
+                    <td>
+                      {user.charities?.name ? (
+                        <div className="user-charity">
+                          <Heart size={14} />
+                          <span>
+                            {user.charities.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="muted-text">
+                          Not selected
+                        </span>
+                      )}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {user.charity_percentage || 10}%
+                      </strong>
+                    </td>
+
+                    <td>
+                      <div className="user-date">
+                        <CalendarDays size={14} />
+                        {formatDate(user.created_at)}
+                      </div>
+                    </td>
+
+                    <td>
+                      <div className="role-control">
+                        <select
+                          value={user.role || "subscriber"}
+                          disabled={
+                            updatingId === user.id
+                          }
+                          onChange={(event) =>
+                            handleRoleChange(
+                              user.id,
+                              event.target.value
+                            )
+                          }
+                        >
+                          <option value="subscriber">
+                            Subscriber
+                          </option>
+
+                          <option value="admin">
+                            Administrator
+                          </option>
+                        </select>
+
+                        {updatingId === user.id && (
+                          <RefreshCw
+                            size={14}
+                            className="spin"
+                          />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+}
 
-const styles = {
-  page: {
-    minHeight: "100vh",
-    padding: "35px",
-    background: "#080909",
-    color: "#fff",
-  },
-
-  center: {
-    minHeight: "80vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#080909",
-    color: "#fff",
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "30px",
-  },
-
-  eyebrow: {
-    color: "#a3e635",
-    fontSize: "12px",
-    fontWeight: 700,
-    letterSpacing: "2px",
-    margin: 0,
-  },
-
-  subtitle: {
-    color: "#888",
-  },
-
-  count: {
-    background: "#161818",
-    border: "1px solid #292b2b",
-    padding: "10px 15px",
-    borderRadius: "10px",
-    color: "#a3e635",
-  },
-
-  table: {
-    background: "#111313",
-    border: "1px solid #242626",
-    borderRadius: "18px",
-    overflow: "hidden",
-  },
-
-  tableHeader: {
-    display: "grid",
-    gridTemplateColumns:
-      "1.4fr 2fr .8fr .8fr 1fr",
-    gap: "20px",
-    padding: "18px 22px",
-    color: "#777",
-    fontSize: "12px",
-    textTransform: "uppercase",
-    letterSpacing: "1px",
-    borderBottom: "1px solid #252727",
-  },
-
-  row: {
-    display: "grid",
-    gridTemplateColumns:
-      "1.4fr 2fr .8fr .8fr 1fr",
-    gap: "20px",
-    alignItems: "center",
-    padding: "17px 22px",
-    borderBottom: "1px solid #202222",
-  },
-
-  user: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-  },
-
-  avatar: {
-    width: "34px",
-    height: "34px",
-    borderRadius: "50%",
-    background: "#242727",
-    display: "grid",
-    placeItems: "center",
-    color: "#a3e635",
-    fontWeight: 700,
-  },
-
-  muted: {
-    color: "#999",
-    fontSize: "14px",
-  },
-
-  badge: {
-    display: "inline-block",
-    width: "fit-content",
-    padding: "5px 9px",
-    borderRadius: "20px",
-    background: "#242626",
-    color: "#aaa",
-    fontSize: "11px",
-    textTransform: "capitalize",
-  },
-
-  admin: {
-    background: "#29351b",
-    color: "#a3e635",
-  },
-};
-
-export default Users;
+function UsersIcon() {
+  return (
+    <div className="users-icon-group">
+      <UserRound size={17} />
+      <UserRound size={12} />
+    </div>
+  );
+}

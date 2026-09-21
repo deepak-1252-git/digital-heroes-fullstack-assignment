@@ -1,175 +1,203 @@
+import {
+  Home,
+  BarChart3,
+  Heart,
+  Gift,
+  Trophy,
+  WalletCards,
+  User,
+  LogOut,
+  Menu,
+  Settings,
+  X,
+} from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import "./UserLayout.css";
+
+const navigation = [
+  {
+    label: "Overview",
+    path: "/dashboard",
+    icon: Home,
+    end: true,
+  },
+  {
+    label: "My Scores",
+    path: "/dashboard/scores",
+    icon: BarChart3,
+  },
+  {
+    label: "Charity",
+    path: "/dashboard/charity",
+    icon: Heart,
+  },
+  {
+    label: "My Draws",
+    path: "/dashboard/draws",
+    icon: Gift,
+  },
+  {
+    label: "Winnings",
+    path: "/dashboard/winnings",
+    icon: Trophy,
+  },
+  {
+    label: "Subscription",
+    path: "/dashboard/subscription",
+    icon: WalletCards,
+  },
+];
+
+const accountNavigation = [
+  {
+    label: "Profile",
+    path: "/dashboard/profile",
+    icon: User,
+  },
+];
 
 const UserLayout = () => {
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
 
-  const logout = async () => {
+  const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/login");
   };
 
-  const links = [
-    { label: "Overview", path: "/dashboard" },
-    { label: "My Scores", path: "/dashboard/scores" },
-    { label: "Charity", path: "/dashboard/charity" },
-    { label: "Draws", path: "/dashboard/draws" },
-    { label: "Winnings", path: "/dashboard/winnings" },
-    { label: "Subscription", path: "/dashboard/subscription" },
-    { label: "Profile", path: "/dashboard/profile" },
-  ];
+  const closeMobile = () => {
+    setMobileOpen(false);
+  };
+
+  const renderNavItem = (item) => {
+    const Icon = item.icon;
+
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        end={item.end}
+        onClick={closeMobile}
+        className={({ isActive }) =>
+          `user-sidebar-link ${isActive ? "active" : ""}`
+        }
+      >
+        <Icon size={18} strokeWidth={1.8} />
+        <span>{item.label}</span>
+      </NavLink>
+    );
+  };
 
   return (
-    <div style={styles.app}>
+    <div className="user-layout">
+      <aside
+        className={`user-sidebar ${mobileOpen ? "user-sidebar-open" : ""
+          }`}
+      >
+        <div className="user-sidebar-top">
+          <NavLink
+            to="/dashboard"
+            className="user-brand"
+            onClick={closeMobile}
+          >
+            <span className="user-brand-mark">D</span>
 
-      <aside style={styles.sidebar}>
+            <span>
+              Digital<span>Heroes</span>
+            </span>
+          </NavLink>
 
-        <div style={styles.logo}>
-          <span style={styles.logospan}>DH</span>
-          <div>
-            <strong>Digital</strong>
-            <small style={styles.logosmall}>Heroes</small>
+          <button
+            className="user-sidebar-close"
+            type="button"
+            onClick={closeMobile}
+            aria-label="Close navigation"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="user-sidebar-content">
+          <div className="user-nav-section">
+            <p className="user-nav-label">Workspace</p>
+
+            <nav className="user-nav">
+              {navigation.map(renderNavItem)}
+            </nav>
+          </div>
+
+          <div className="user-nav-section">
+            <p className="user-nav-label">Account</p>
+
+            <nav className="user-nav">
+              {accountNavigation.map(renderNavItem)}
+            </nav>
           </div>
         </div>
 
-        <div style={styles.menu}>
+        <div className="user-sidebar-bottom">
+          <div className="user-impact-card">
+            <Heart size={17} />
 
-          <p style={styles.sectionTitle}>
-            MEMBER
-          </p>
-
-          {links.map((link) => (
-            <NavLink
-              key={link.path}
-              to={link.path}
-              end={link.path === "/dashboard"}
-              style={({ isActive }) => ({
-                ...styles.link,
-                ...(isActive ? styles.active : {}),
-              })}
-            >
-              {link.label}
-            </NavLink>
-          ))}
-
-        </div>
-
-        <div style={styles.bottom}>
+            <div>
+              <strong>Make an impact</strong>
+              <span>Your contribution matters.</span>
+            </div>
+          </div>
 
           <button
-            style={styles.logout}
-            onClick={logout}
+            className="user-signout"
+            type="button"
+            onClick={handleSignOut}
           >
-            Sign out
+            <LogOut size={17} />
+            <span>Sign out</span>
           </button>
-
         </div>
-
       </aside>
 
+      {mobileOpen && (
+        <button
+          className="user-sidebar-overlay"
+          type="button"
+          aria-label="Close navigation"
+          onClick={closeMobile}
+        />
+      )}
 
-      <main style={styles.main}>
-        <Outlet />
-      </main>
+      <div className="user-main">
+        <header className="user-mobile-header">
+          <button
+            className="user-menu-button"
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu size={21} />
+          </button>
 
+          <NavLink to="/dashboard" className="user-mobile-brand">
+            <span className="user-brand-mark">D</span>
+            <span>DigitalHeroes</span>
+          </NavLink>
+
+          <NavLink
+            to="/dashboard/profile"
+            className="user-mobile-profile"
+            aria-label="Profile"
+          >
+            <User size={18} />
+          </NavLink>
+        </header>
+
+        <main className="user-content">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
-};
-
-
-const styles = {
-  app: {
-    minHeight: "100vh",
-    display: "flex",
-    background: "#080909",
-    color: "#fff",
-  },
-
-  sidebar: {
-    width: "240px",
-    minHeight: "100vh",
-    background: "#101212",
-    borderRight: "1px solid #252727",
-    display: "flex",
-    flexDirection: "column",
-    padding: "25px 15px",
-    boxSizing: "border-box",
-    position: "sticky",
-    top: 0,
-    height: "100vh",
-  },
-
-  logo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "5px 10px 30px",
-  },
-
-  logospan: {
-    width: "38px",
-    height: "38px",
-    background: "#a3e635",
-    color: "#111",
-    borderRadius: "10px",
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 900,
-  },
-
-  logosmall: {
-    display: "block",
-    color: "#777",
-    fontSize: "11px",
-    marginTop: "2px",
-  },
-
-  menu: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "5px",
-  },
-
-  sectionTitle: {
-    color: "#555",
-    fontSize: "10px",
-    letterSpacing: "2px",
-    margin: "5px 10px 10px",
-  },
-
-  link: {
-    color: "#8c8c8c",
-    textDecoration: "none",
-    padding: "11px 12px",
-    borderRadius: "9px",
-    fontSize: "14px",
-    transition: "0.2s",
-  },
-
-  active: {
-    background: "#1d2515",
-    color: "#a3e635",
-  },
-
-  bottom: {
-    marginTop: "auto",
-  },
-
-  logout: {
-    width: "100%",
-    padding: "11px",
-    borderRadius: "9px",
-    border: "1px solid #292b2b",
-    background: "transparent",
-    color: "#888",
-    cursor: "pointer",
-  },
-
-  main: {
-    flex: 1,
-    minWidth: 0,
-    overflow: "auto",
-  },
 };
 
 export default UserLayout;

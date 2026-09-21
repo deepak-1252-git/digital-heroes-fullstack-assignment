@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { useState } from "react";
+import { supabase } from "../../lib/supabase";  
+
+import "./Draws.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -8,8 +10,12 @@ const Draws = () => {
   const [drawMonth, setDrawMonth] = useState("2026-09-01");
 
   const [simulation, setSimulation] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [publishing, setPublishing] = useState(false);
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const getToken = async () => {
     const {
@@ -23,9 +29,34 @@ const Draws = () => {
     return session.access_token;
   };
 
+  const parseResponse = async (response) => {
+    const contentType =
+      response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+
+    const text = await response.text();
+
+    return {
+      success: false,
+      message:
+        text ||
+        `Request failed with status ${response.status}`,
+    };
+  };
+
   const simulateDraw = async () => {
     try {
       setLoading(true);
+      setError("");
+      setSuccess("");
+      setSimulation(null);
+
+      if (!drawMonth) {
+        throw new Error("Please select a draw month");
+      }
 
       const token = await getToken();
 
@@ -43,19 +74,31 @@ const Draws = () => {
         }
       );
 
-      const result = await response.json();
+      const result = await parseResponse(response);
 
-      if (!response.ok) {
+      if (!response.ok || result.success === false) {
         throw new Error(
           result.message || "Simulation failed"
         );
       }
 
-      setSimulation(result.draw);
+      if (!result.draw) {
+        throw new Error(
+          "Invalid simulation response from server"
+        );
+      }
 
+      setSimulation(result.draw);
+      setSuccess(
+        "Draw simulation generated successfully."
+      );
     } catch (error) {
-      console.error(error);
-      alert(error.message);
+      console.error("Simulation error:", error);
+
+      setError(
+        error.message ||
+        "Something went wrong while simulating the draw."
+      );
     } finally {
       setLoading(false);
     }
@@ -63,18 +106,26 @@ const Draws = () => {
 
   const publishDraw = async () => {
     if (!simulation) {
-      alert("Please simulate the draw first");
+      setError("Please simulate the draw first.");
+      return;
+    }
+
+    if (!drawMonth) {
+      setError("Please select a draw month.");
       return;
     }
 
     const confirmed = window.confirm(
-      "Are you sure you want to publish this draw?"
+      `Publish the ${drawMonth} draw?\n\n` +
+      `Numbers: ${simulation.drawNumbers.join(", ")}`
     );
 
     if (!confirmed) return;
 
     try {
       setPublishing(true);
+      setError("");
+      setSuccess("");
 
       const token = await getToken();
 
@@ -94,59 +145,87 @@ const Draws = () => {
         }
       );
 
-      const result = await response.json();
+      const result = await parseResponse(response);
 
-      if (!response.ok) {
+      if (!response.ok || result.success === false) {
         throw new Error(
           result.message || "Publish failed"
         );
       }
 
-      alert("Draw published successfully!");
-
+      setSuccess("Draw published successfully!");
       setSimulation(null);
-
     } catch (error) {
-      console.error(error);
-      alert(error.message);
+      console.error("Publish error:", error);
+
+      setError(
+        error.message ||
+        "Something went wrong while publishing the draw."
+      );
     } finally {
       setPublishing(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#080808] text-white p-6 md:p-10">
+  const handleDrawTypeChange = (value) => {
+    setDrawType(value);
+    setSimulation(null);
+    setError("");
+    setSuccess("");
+  };
 
-      <div className="max-w-6xl mx-auto">
+  const handleMonthChange = (value) => {
+    setDrawMonth(value);
+    setSimulation(null);
+    setError("");
+    setSuccess("");
+  };
+
+  return (
+    <div className="draws-page">
+      <div className="draws-container">
 
         {/* Header */}
-        <div className="mb-10">
-          <p className="text-lime-400 text-sm font-medium mb-2">
+        <div className="draws-header">
+          <p className="draws-eyebrow">
             ADMIN
           </p>
 
-          <h1 className="text-3xl md:text-4xl font-bold">
+          <h1>
             Draw Management
           </h1>
 
-          <p className="text-gray-400 mt-2">
+          <p className="draws-description">
             Simulate, review and publish monthly draws.
           </p>
         </div>
 
+        {/* Error */}
+        {error && (
+          <div className="draws-alert draws-alert-error">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {/* Success */}
+        {success && (
+          <div className="draws-alert draws-alert-success">
+            <p>{success}</p>
+          </div>
+        )}
 
         {/* Controls */}
-        <div className="bg-[#111111] border border-white/10 rounded-2xl p-6 mb-6">
+        <div className="draws-card draws-controls">
 
-          <h2 className="text-xl font-semibold mb-6">
+          <h2>
             Create Monthly Draw
           </h2>
 
-          <div className="grid md:grid-cols-2 gap-5">
+          <div className="draws-controls-grid">
 
             {/* Month */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
+            <div className="draws-field">
+              <label>
                 Draw Month
               </label>
 
@@ -154,25 +233,22 @@ const Draws = () => {
                 type="date"
                 value={drawMonth}
                 onChange={(e) =>
-                  setDrawMonth(e.target.value)
+                  handleMonthChange(e.target.value)
                 }
-                className="w-full bg-[#080808] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-lime-400"
               />
             </div>
 
-
             {/* Type */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
+            <div className="draws-field">
+              <label>
                 Draw Type
               </label>
 
               <select
                 value={drawType}
                 onChange={(e) =>
-                  setDrawType(e.target.value)
+                  handleDrawTypeChange(e.target.value)
                 }
-                className="w-full bg-[#080808] border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-lime-400"
               >
                 <option value="random">
                   Random Lottery
@@ -186,11 +262,10 @@ const Draws = () => {
 
           </div>
 
-
           <button
+            className="draws-primary-btn"
             onClick={simulateDraw}
-            disabled={loading}
-            className="mt-6 bg-lime-400 text-black font-semibold px-6 py-3 rounded-xl hover:bg-lime-300 transition disabled:opacity-50"
+            disabled={loading || publishing}
           >
             {loading
               ? "Simulating..."
@@ -199,35 +274,35 @@ const Draws = () => {
 
         </div>
 
-
         {/* Simulation */}
         {simulation && (
-          <div className="space-y-6">
+          <div className="draws-simulation">
 
             {/* Numbers */}
-            <div className="bg-[#111111] border border-white/10 rounded-2xl p-6">
+            <div className="draws-card draws-result-card">
 
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold">
+              <div className="draws-result-header">
+
+                <h2>
                   Simulation Result
                 </h2>
 
-                <span className="text-xs bg-yellow-400/10 text-yellow-400 px-3 py-1 rounded-full">
+                <span className="draws-simulated-badge">
                   SIMULATED
                 </span>
+
               </div>
 
-
-              <p className="text-gray-400 text-sm mb-4">
+              <p className="draws-section-label">
                 Draw Numbers
               </p>
 
-              <div className="flex gap-3 flex-wrap">
-                {simulation.drawNumbers.map(
+              <div className="draws-numbers">
+                {simulation.drawNumbers?.map(
                   (number) => (
                     <div
                       key={number}
-                      className="w-14 h-14 rounded-full bg-lime-400 text-black flex items-center justify-center text-xl font-bold"
+                      className="draw-number"
                     >
                       {number}
                     </div>
@@ -237,54 +312,52 @@ const Draws = () => {
 
             </div>
 
-
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="draws-stats-grid">
 
               <Stat
                 title="Participants"
                 value={
-                  simulation.totalParticipants
+                  simulation.totalParticipants ?? 0
                 }
               />
 
               <Stat
                 title="5 Match"
                 value={
-                  simulation.winners.fiveMatch.length
+                  simulation.winners?.fiveMatch?.length ?? 0
                 }
               />
 
               <Stat
                 title="4 Match"
                 value={
-                  simulation.winners.fourMatch.length
+                  simulation.winners?.fourMatch?.length ?? 0
                 }
               />
 
               <Stat
                 title="3 Match"
                 value={
-                  simulation.winners.threeMatch.length
+                  simulation.winners?.threeMatch?.length ?? 0
                 }
               />
 
             </div>
 
+            {/* Match Breakdown */}
+            <div className="draws-card">
 
-            {/* Winners */}
-            <div className="bg-[#111111] border border-white/10 rounded-2xl p-6">
-
-              <h2 className="text-xl font-semibold mb-5">
+              <h2 className="draws-card-title">
                 Match Breakdown
               </h2>
 
-              <div className="space-y-3">
+              <div className="match-list">
 
                 <MatchRow
                   label="5 Match Jackpot"
                   count={
-                    simulation.winners.fiveMatch.length
+                    simulation.winners?.fiveMatch?.length ?? 0
                   }
                   percentage="40%"
                 />
@@ -292,7 +365,7 @@ const Draws = () => {
                 <MatchRow
                   label="4 Match"
                   count={
-                    simulation.winners.fourMatch.length
+                    simulation.winners?.fourMatch?.length ?? 0
                   }
                   percentage="35%"
                 />
@@ -300,7 +373,7 @@ const Draws = () => {
                 <MatchRow
                   label="3 Match"
                   count={
-                    simulation.winners.threeMatch.length
+                    simulation.winners?.threeMatch?.length ?? 0
                   }
                   percentage="25%"
                 />
@@ -309,27 +382,27 @@ const Draws = () => {
 
             </div>
 
-
             {/* Publish */}
-            <div className="bg-lime-400/10 border border-lime-400/20 rounded-2xl p-6">
+            <div className="draws-publish-card">
 
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+              <div className="draws-publish-content">
 
                 <div>
-                  <h3 className="font-semibold text-lg">
+                  <h3>
                     Ready to publish?
                   </h3>
 
-                  <p className="text-gray-400 text-sm mt-1">
-                    Publishing will permanently create the
-                    draw, entries, prize pools and winners.
+                  <p>
+                    Publishing will permanently create
+                    the draw, entries, prize pools and
+                    winners.
                   </p>
                 </div>
 
                 <button
+                  className="draws-publish-btn"
                   onClick={publishDraw}
-                  disabled={publishing}
-                  className="bg-lime-400 text-black font-bold px-7 py-3 rounded-xl hover:bg-lime-300 transition disabled:opacity-50"
+                  disabled={publishing || loading}
                 >
                   {publishing
                     ? "Publishing..."
@@ -344,52 +417,59 @@ const Draws = () => {
         )}
 
       </div>
-
     </div>
   );
 };
 
 
-const Stat = ({ title, value }) => (
-  <div className="bg-[#111111] border border-white/10 rounded-2xl p-5">
-    <p className="text-gray-400 text-sm">
-      {title}
-    </p>
+const Stat = ({ title, value }) => {
+  return (
+    <div className="draws-stat-card">
+      <p>
+        {title}
+      </p>
 
-    <p className="text-2xl font-bold mt-2">
-      {value}
-    </p>
-  </div>
-);
+      <strong>
+        {value}
+      </strong>
+    </div>
+  );
+};
 
 
 const MatchRow = ({
   label,
   count,
   percentage,
-}) => (
-  <div className="flex items-center justify-between bg-[#080808] rounded-xl px-4 py-4">
-    <div>
-      <p className="font-medium">
-        {label}
-      </p>
+}) => {
+  return (
+    <div className="match-row">
 
-      <p className="text-gray-500 text-sm">
-        Prize allocation
-      </p>
+      <div className="match-info">
+        <p>
+          {label}
+        </p>
+
+        <span>
+          Prize allocation
+        </span>
+      </div>
+
+      <div className="match-values">
+
+        <span className="match-percentage">
+          {percentage}
+        </span>
+
+        <strong>
+          {count}
+        </strong>
+
+      </div>
+
     </div>
-
-    <div className="flex items-center gap-5">
-      <span className="text-gray-400">
-        {percentage}
-      </span>
-
-      <span className="font-bold">
-        {count}
-      </span>
-    </div>
-  </div>
-);
+  );
+};
 
 
 export default Draws;
