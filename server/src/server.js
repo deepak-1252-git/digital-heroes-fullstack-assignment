@@ -3,9 +3,11 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
+import adminRoutes from "./routes/admin.routes.js";
 import subscriptionRoutes from "./routes/subscription.routes.js";
 import razorpayWebhookRoutes from "./routes/razorpay.webhook.routes.js";
 import drawRoutes from "./routes/draw.routes.js";
+import winnerRoutes from "./routes/winner.routes.js";
 
 const app = express();
 
@@ -32,6 +34,11 @@ app.get("/", (req, res) => {
 });
 
 app.use(
+  "/api/admin",
+  adminRoutes
+);
+
+app.use(
   "/api/subscriptions",
   subscriptionRoutes
 );
@@ -39,6 +46,11 @@ app.use(
 app.use(
   "/api/draws",
   drawRoutes
+);
+
+app.use(
+  "/api/winners",
+  winnerRoutes
 );
 
 const PORT = process.env.PORT || 5000;
