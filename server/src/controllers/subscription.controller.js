@@ -254,7 +254,9 @@ const getMySubscription = async (req, res) => {
         subscription_plans (
           name,
           billing_interval,
-          price
+          price,
+          prize_pool_percentage,
+          minimum_charity_percentage
         )
       `)
       .eq("user_id", req.user.id)
