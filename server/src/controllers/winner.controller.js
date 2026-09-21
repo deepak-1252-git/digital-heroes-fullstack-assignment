@@ -48,6 +48,14 @@ export const getWinners = async (req, res) => {
           tier,
           percentage,
           total_amount
+        ),
+
+        winner_proofs (
+          id,
+          file_url,
+          status,
+          admin_note,
+          created_at
         )
       `)
       .order("created_at", { ascending: false });
