@@ -54,8 +54,7 @@ export const getWinners = async (req, res) => {
           id,
           file_url,
           status,
-          admin_note,
-          created_at
+          admin_note
         )
       `)
       .order("created_at", { ascending: false });
