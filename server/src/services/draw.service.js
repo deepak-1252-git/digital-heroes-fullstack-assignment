@@ -25,6 +25,65 @@ const generateRandomNumbers = () => {
   return [...numbers].sort((a, b) => a - b);
 };
 
+// Generate 5 unique numbers using score-frequency weighting.
+// Numbers that appear more frequently in eligible users' latest
+// 5 scores receive a higher probability of being selected.
+const generateAlgorithmicNumbers = (frequencyMap) => {
+  const availableNumbers = Array.from(
+    { length: MAX_SCORE - MIN_SCORE + 1 },
+    (_, index) => index + MIN_SCORE
+  );
+
+  const selectedNumbers = [];
+
+  while (
+    selectedNumbers.length < DRAW_SIZE &&
+    availableNumbers.length > 0
+  ) {
+    const weightedNumbers = availableNumbers.map((number) => ({
+      number,
+      weight: (frequencyMap[number] || 0) + 1,
+    }));
+
+    const totalWeight = weightedNumbers.reduce(
+      (total, item) => total + item.weight,
+      0
+    );
+
+    let randomValue = Math.random() * totalWeight;
+
+    let selectedNumber = null;
+
+    for (const item of weightedNumbers) {
+      randomValue -= item.weight;
+
+      if (randomValue <= 0) {
+        selectedNumber = item.number;
+        break;
+      }
+    }
+
+    if (selectedNumber === null) {
+      selectedNumber =
+        availableNumbers[
+          availableNumbers.length - 1
+        ];
+    }
+
+    selectedNumbers.push(selectedNumber);
+
+    // Remove selected number so every draw number is unique.
+    const selectedIndex =
+      availableNumbers.indexOf(selectedNumber);
+
+    if (selectedIndex !== -1) {
+      availableNumbers.splice(selectedIndex, 1);
+    }
+  }
+
+  return selectedNumbers.sort((a, b) => a - b);
+};
+
 // Compare user's 5 scores with draw numbers
 const calculateMatchCount = (userNumbers, drawNumbers) => {
   return userNumbers.filter((number) =>
@@ -78,45 +137,80 @@ const simulateDraw = async ({ drawType = "random" }) => {
     throw new Error("Invalid draw type");
   }
 
-  const drawNumbers = generateRandomNumbers();
-
   const subscribers = await getActiveSubscribers();
 
-  const entries = [];
+  const eligibleSubscribers = [];
+  const scoreFrequency = {};
 
+  // Collect latest 5 scores from every eligible subscriber.
   for (const subscriber of subscribers) {
-    const scores = await getLatestFiveScores(subscriber.user_id);
+    const scores = await getLatestFiveScores(
+      subscriber.user_id
+    );
 
-    // User needs 5 scores to participate
+    // User needs 5 scores to participate.
     if (scores.length < 5) {
       continue;
     }
 
-    const userNumbers = scores.map((item) => item.score);
+    const userNumbers = scores.map((item) =>
+      Number(item.score)
+    );
 
+    eligibleSubscribers.push({
+      user_id: subscriber.user_id,
+      numbers: userNumbers,
+    });
+
+    // Build frequency map for algorithmic draw.
+    for (const score of userNumbers) {
+      scoreFrequency[score] =
+        (scoreFrequency[score] || 0) + 1;
+    }
+  }
+
+  // Generate numbers according to selected draw type.
+  const drawNumbers =
+    drawType === "algorithmic"
+      ? generateAlgorithmicNumbers(scoreFrequency)
+      : generateRandomNumbers();
+
+  const entries = [];
+
+  for (const subscriber of eligibleSubscribers) {
     const matchCount = calculateMatchCount(
-      userNumbers,
+      subscriber.numbers,
       drawNumbers
     );
 
     entries.push({
       user_id: subscriber.user_id,
-      numbers: userNumbers,
+      numbers: subscriber.numbers,
       match_count: matchCount,
     });
   }
 
   const winners = {
-    fiveMatch: entries.filter((entry) => entry.match_count === 5),
-    fourMatch: entries.filter((entry) => entry.match_count === 4),
-    threeMatch: entries.filter((entry) => entry.match_count === 3),
+    fiveMatch: entries.filter(
+      (entry) => entry.match_count === 5
+    ),
+
+    fourMatch: entries.filter(
+      (entry) => entry.match_count === 4
+    ),
+
+    threeMatch: entries.filter(
+      (entry) => entry.match_count === 3
+    ),
   };
 
   return {
+    drawType,
     drawNumbers,
     totalParticipants: entries.length,
     entries,
     winners,
+    scoreFrequency,
   };
 };
 
