@@ -12,14 +12,21 @@ const getAdminUsers = async (req, res) => {
         selected_charity_id,
         charity_percentage,
         created_at,
-        updated_at
+        updated_at,
+        charities (
+          id,
+          name
+        )
       `)
       .order("created_at", {
         ascending: false,
       });
 
     if (error) {
-      console.error("Get admin users error:", error);
+      console.error(
+        "Get admin users error:",
+        error
+      );
 
       return res.status(500).json({
         success: false,
@@ -32,7 +39,10 @@ const getAdminUsers = async (req, res) => {
       users: profiles || [],
     });
   } catch (error) {
-    console.error("Admin users error:", error);
+    console.error(
+      "Admin users error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
