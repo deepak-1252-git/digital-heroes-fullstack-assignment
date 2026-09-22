@@ -2,9 +2,8 @@ import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
-
 import adminRoutes from "./routes/admin.routes.js";
-import adminUserRoutes from "./routes/admin.users.routes.js";
+import adminUsersRoutes from "./routes/admin.users.routes.js";
 import subscriptionRoutes from "./routes/subscription.routes.js";
 import razorpayWebhookRoutes from "./routes/razorpay.webhook.routes.js";
 import drawRoutes from "./routes/draw.routes.js";
@@ -33,7 +32,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/admin", adminRoutes);
 
-app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/users", adminUsersRoutes);
 
 app.use("/api/subscriptions", subscriptionRoutes);
 
