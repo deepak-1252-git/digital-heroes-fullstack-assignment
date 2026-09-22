@@ -5,6 +5,7 @@ import cors from "cors";
 import adminRoutes from "./routes/admin.routes.js";
 import adminUsersRoutes from "./routes/admin.users.routes.js";
 import subscriptionRoutes from "./routes/subscription.routes.js";
+import adminSubscriptionsRoutes from "./routes/admin.subscriptions.routes.js";
 import razorpayWebhookRoutes from "./routes/razorpay.webhook.routes.js";
 import drawRoutes from "./routes/draw.routes.js";
 import winnerRoutes from "./routes/winner.routes.js";
@@ -35,6 +36,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin/users", adminUsersRoutes);
 
 app.use("/api/subscriptions", subscriptionRoutes);
+
+app.use("/api/admin/subscriptions",adminSubscriptionsRoutes );
 
 app.use("/api/draws", drawRoutes);
 
