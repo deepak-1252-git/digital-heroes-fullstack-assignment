@@ -73,8 +73,6 @@ const Subscription = () => {
 
       const result = await response.json();
 
-      console.log("SUBSCRIPTION API RESULT:", result);
-
       if (!response.ok) {
         throw new Error(
           result.message || "Failed to load subscription"
@@ -291,6 +289,60 @@ const Subscription = () => {
     }
   };
 
+  // ------------------------------------------
+  const handleCancelSubscription = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel your subscription?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error("Please login again");
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/subscriptions/cancle`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to cancel subscription"
+        );
+      }
+
+      setSubscription((prev) => ({
+        ...prev,
+        cancel_at_period_end: true,
+      }));
+
+      alert(
+        "Subscription cancellation scheduled successfully."
+      );
+    } catch (error) {
+      console.error("Cancellation error:", error);
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --------------------------------
   // Loading
   // --------------------------------
@@ -442,6 +494,36 @@ const Subscription = () => {
               </Badge>
 
             </div>
+
+            {subscription.status === "active" &&
+              !subscription.cancel_at_period_end && (
+                <button
+                  type="button"
+                  className="cancel-subscription-btn"
+                  onClick={handleCancelSubscription}
+                  disabled={loading}
+                >
+                  {loading
+                    ? "Cancelling..."
+                    : "Cancel Subscription"}
+                </button>
+              )}
+
+            {subscription.cancel_at_period_end && (
+              <div className="subscription-cancelled-message">
+                <AlertCircle size={18} />
+
+                <span>
+                  Your subscription is scheduled to end on{" "}
+                  {subscription.current_period_end
+                    ? new Date(
+                      subscription.current_period_end
+                    ).toLocaleDateString("en-IN")
+                    : "the end of your billing period"}
+                  .
+                </span>
+              </div>
+            )}
 
             {/* PRICE */}
 

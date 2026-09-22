@@ -16,6 +16,8 @@ import Loader from "../../components/Loader/Loader";
 
 import "./Subscriptions.css";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 function formatDate(date) {
   if (!date) return "—";
 
@@ -93,6 +95,7 @@ export default function Subscriptions() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const loadSubscriptions = async (isRefresh = false) => {
     try {
@@ -103,51 +106,49 @@ export default function Subscriptions() {
       }
 
       setError("");
+      setSuccess("");
 
-      const { data, error: queryError } = await supabase
-        .from("subscriptions")
-        .select(`
-          id,
-          user_id,
-          plan_id,
-          status,
-          current_period_start,
-          current_period_end,
-          cancel_at_period_end,
-          created_at,
-          updated_at,
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-          profiles (
-            id,
-            full_name,
-            email
-          ),
-
-          subscription_plans (
-            id,
-            name,
-            price,
-            billing_interval
-          )
-        `)
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (queryError) {
-        throw queryError;
+      if (!session) {
+        throw new Error(
+          "Admin session not found."
+        );
       }
 
-      setSubscriptions(data || []);
-    } catch (err) {
+      const response = await fetch(
+        `${API_URL}/api/admin/subscriptions`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+          "Unable to load subscriptions."
+        );
+      }
+
+      setSubscriptions(
+        result.subscriptions || []
+      );
+    } catch (error) {
       console.error(
         "ADMIN SUBSCRIPTIONS ERROR:",
-        err
+        error
       );
 
       setError(
-        err.message ||
-          "Unable to load subscriptions."
+        error.message ||
+        "Unable to load subscriptions."
       );
     } finally {
       setLoading(false);
@@ -185,9 +186,11 @@ export default function Subscriptions() {
         statusFilter === "all" ||
         subscription.status === statusFilter;
 
+
       return (
         matchesSearch &&
         matchesStatus
+
       );
     });
   }, [
@@ -464,7 +467,7 @@ export default function Subscriptions() {
                               {" / "}
 
                               {plan?.billing_interval ===
-                              "yearly"
+                                "yearly"
                                 ? "year"
                                 : "month"}
                             </span>
@@ -525,13 +528,19 @@ export default function Subscriptions() {
                         <td>
                           {subscription.cancel_at_period_end ? (
                             <span className="cancel-at-end">
-                              Ends at period end
+                              Ends on{" "}
+                              {subscription.current_period_end
+                                ? new Date(
+                                  subscription.current_period_end
+                                ).toLocaleDateString("en-IN")
+                                : "at period end"}
                             </span>
                           ) : (
                             <span className="not-cancelling">
-                              —
+                              Auto-renewing
                             </span>
                           )}
+
                         </td>
 
                         {/* Created */}

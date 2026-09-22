@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute"; 
 
 import UserLayout from "./layouts/UserLayout";
 import AdminLayout from "./layouts/AdminLayout";
@@ -49,15 +50,23 @@ function App() {
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          
+
         </Route>
 
 
         {/* User Dashboard */}
         <Route
-          path="/dashboard"
+          path="/dashboard/subscription"
           element={
             <ProtectedRoute>
+              <Subscription />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute requireSubscription={true}>
               <UserLayout />
             </ProtectedRoute>
           }
@@ -67,7 +76,6 @@ function App() {
           <Route path="scores" element={<Scores />} />
           <Route path="charity" element={<Charity />} />
           <Route path="draws" element={<Draws />} />
-          <Route path="subscription" element={<Subscription />} />
           <Route path="winnings" element={<Winnings />} />
           <Route path="profile" element={<Profile />} />
 
@@ -77,9 +85,9 @@ function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <AdminRoute>
               <AdminLayout />
-            </ProtectedRoute>
+            </AdminRoute>
           }
         >
           <Route index element={<AdminDashboard />} />

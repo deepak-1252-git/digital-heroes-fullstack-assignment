@@ -18,6 +18,8 @@ import Badge from "../../components/Badge/Badge";
 
 import "./Users.css";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 function formatDate(date) {
   if (!date) return "—";
 
@@ -55,28 +57,33 @@ export default function Users() {
       setError("");
       setSuccess("");
 
-      const { data, error: queryError } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          full_name,
-          email,
-          role,
-          selected_charity_id,
-          charity_percentage,
-          created_at,
-          charities (
-            id,
-            name
-          )
-        `)
-        .order("created_at", { ascending: false });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (queryError) {
-        throw queryError;
+      if (!session) {
+        throw new Error("Admin session not found.");
       }
 
-      setUsers(data || []);
+      const response = await fetch(
+        `${API_URL}/api/admin/users`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Unable to load users."
+        );
+      }
+
+      setUsers(result.users || []);
     } catch (err) {
       console.error("ADMIN USERS ERROR:", err);
 
@@ -110,59 +117,71 @@ export default function Users() {
     });
   }, [users, search, roleFilter]);
 
-  const handleRoleChange = async (userId, newRole) => {
+  const handleRoleChange = async (
+    userId,
+    newRole
+  ) => {
     try {
       setUpdatingId(userId);
       setError("");
       setSuccess("");
 
       const {
-        data: { user: currentUser },
-        error: userError,
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (userError) {
-        throw userError;
-      }
-
-      if (!currentUser) {
-        throw new Error("Admin session not found.");
-      }
-
-      if (currentUser.id === userId && newRole !== "admin") {
+      if (!session) {
         throw new Error(
-          "You cannot remove your own admin role."
+          "Admin session not found."
         );
       }
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          role: newRole,
-        })
-        .eq("id", userId);
+      const response = await fetch(
+        `${API_URL}/api/admin/users/${userId}/role`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            role: newRole,
+          }),
+        }
+      );
 
-      if (updateError) {
-        throw updateError;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+          "Unable to update user role."
+        );
       }
 
       setUsers((currentUsers) =>
         currentUsers.map((user) =>
           user.id === userId
             ? {
-                ...user,
-                role: newRole,
-              }
+              ...user,
+              role: result.user.role,
+            }
             : user
         )
       );
 
-      setSuccess("User role updated successfully.");
+      setSuccess(
+        "User role updated successfully."
+      );
     } catch (err) {
-      console.error("ROLE UPDATE ERROR:", err);
+      console.error(
+        "ROLE UPDATE ERROR:",
+        err
+      );
 
       setError(
-        err.message || "Unable to update user role."
+        err.message ||
+        "Unable to update user role."
       );
     } finally {
       setUpdatingId(null);

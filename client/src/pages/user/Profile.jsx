@@ -188,7 +188,7 @@ const Profile = () => {
       setError("");
       setSuccess("");
 
-      if (newPassword.length < 6) {
+      if (newPassword.length < 8) {
         throw new Error(
           "Password must be at least 8 characters."
         );

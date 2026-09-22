@@ -286,3 +286,35 @@
     font-size: 34px;
   }
 }
+
+
+.cancel-subscription-btn {
+  margin-top: 24px;
+  padding: 12px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.cancel-subscription-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cancel-subscription-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.subscription-cancelled-message {
+  margin-top: 20px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  background: rgba(234, 179, 8, 0.1);
+  color: #facc15;
+}

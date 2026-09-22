@@ -10,7 +10,7 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
-import {supabase} from "../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import "./Auth.css";
 
 function validateEmail(email) {
@@ -114,7 +114,22 @@ export default function Login() {
       return;
     }
 
-    navigate("/dashboard", { replace: true });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role === "admin") {
+      navigate("/admin", { replace: true });
+    } else {
+      navigate("/dashboard", { replace: true });
+    }
+
   }
 
   if (checkingSession) {
@@ -200,9 +215,8 @@ export default function Login() {
               <div className="auth-input-wrapper">
                 <input
                   id="login-email"
-                  className={`auth-input ${
-                    errors.email ? "input-error" : ""
-                  }`}
+                  className={`auth-input ${errors.email ? "input-error" : ""
+                    }`}
                   type="email"
                   name="email"
                   placeholder="you@example.com"
@@ -230,9 +244,8 @@ export default function Login() {
               <div className="auth-input-wrapper">
                 <input
                   id="login-password"
-                  className={`auth-input ${
-                    errors.password ? "input-error" : ""
-                  }`}
+                  className={`auth-input ${errors.password ? "input-error" : ""
+                    }`}
                   type={showPassword ? "text" : "password"}
                   name="password"
                   placeholder="Enter your password"

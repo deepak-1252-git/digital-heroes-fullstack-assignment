@@ -7,12 +7,18 @@ import {
   CalendarDays,
   TrendingUp,
   AlertCircle,
+  Pencil,
+  Trash2,
+  X,
+  Save,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabase";
 import Loader from "../../components/Loader/Loader";
 
 import "./Scores.css";
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 function formatDate(date) {
   if (!date) return "—";
@@ -30,6 +36,12 @@ function getScoreClass(score) {
   return "score-low";
 }
 
+function getInputDate(date) {
+  if (!date) return "";
+
+  return new Date(date).toISOString().split("T")[0];
+}
+
 export default function Scores() {
   const [scores, setScores] = useState([]);
 
@@ -40,6 +52,16 @@ export default function Scores() {
   const [scoreFilter, setScoreFilter] = useState("all");
 
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Edit modal
+  const [editingScore, setEditingScore] = useState(null);
+  const [editScore, setEditScore] = useState("");
+  const [editPlayedAt, setEditPlayedAt] = useState("");
+
+  // Action loading states
+  const [updatingId, setUpdatingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const loadScores = async (isRefresh = false) => {
     try {
@@ -50,39 +72,40 @@ export default function Scores() {
       }
 
       setError("");
+      setSuccess("");
 
-      const { data, error: queryError } = await supabase
-        .from("scores")
-        .select(`
-          id,
-          user_id,
-          score,
-          played_at,
-          created_at,
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-          profiles (
-            id,
-            full_name,
-            email
-          )
-        `)
-        .order("played_at", {
-          ascending: false,
-        })
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (queryError) {
-        throw queryError;
+      if (!session) {
+        throw new Error("Admin session not found.");
       }
 
-      setScores(data || []);
-    } catch (err) {
-      console.error("ADMIN SCORES ERROR:", err);
+      const response = await fetch(
+        `${API_URL}/api/admin/scores`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Unable to load scores."
+        );
+      }
+
+      setScores(result.scores || []);
+    } catch (error) {
+      console.error("ADMIN SCORES ERROR:", error);
 
       setError(
-        err.message || "Unable to load scores."
+        error.message || "Unable to load scores."
       );
     } finally {
       setLoading(false);
@@ -157,6 +180,209 @@ export default function Scores() {
     ).size;
   }, [scores]);
 
+  // ----------------------------------------
+  // OPEN EDIT MODAL
+  // ----------------------------------------
+
+  const openEditModal = (item) => {
+    setEditingScore(item);
+
+    setEditScore(String(item.score));
+
+    setEditPlayedAt(
+      getInputDate(item.played_at)
+    );
+
+    setError("");
+    setSuccess("");
+  };
+
+  // ----------------------------------------
+  // CLOSE EDIT MODAL
+  // ----------------------------------------
+
+  const closeEditModal = () => {
+    if (updatingId) return;
+
+    setEditingScore(null);
+    setEditScore("");
+    setEditPlayedAt("");
+  };
+
+  // ----------------------------------------
+  // UPDATE SCORE
+  // ----------------------------------------
+
+  const handleUpdateScore = async (
+    scoreId,
+    score,
+    playedAt
+  ) => {
+    const numericScore = Number(score);
+
+    if (
+      !Number.isInteger(numericScore) ||
+      numericScore < 1 ||
+      numericScore > 45
+    ) {
+      setError(
+        "Stableford score must be between 1 and 45."
+      );
+
+      return;
+    }
+
+    if (!playedAt) {
+      setError("Please select a played date.");
+
+      return;
+    }
+
+    try {
+      setUpdatingId(scoreId);
+      setError("");
+      setSuccess("");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error(
+          "Admin session not found."
+        );
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/admin/scores/${scoreId}`,
+        {
+          method: "PUT",
+
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            score: numericScore,
+            played_at: playedAt,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+          "Unable to update score."
+        );
+      }
+
+      setScores((currentScores) =>
+        currentScores.map((item) =>
+          item.id === scoreId
+            ? result.score
+            : item
+        )
+      );
+
+      setEditingScore(null);
+      setEditScore("");
+      setEditPlayedAt("");
+
+      setSuccess(
+        "Score updated successfully."
+      );
+    } catch (error) {
+      console.error(
+        "UPDATE SCORE ERROR:",
+        error
+      );
+
+      setError(
+        error.message ||
+        "Unable to update score."
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  // ----------------------------------------
+  // DELETE SCORE
+  // ----------------------------------------
+
+  const handleDeleteScore = async (scoreId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this score?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(scoreId);
+      setError("");
+      setSuccess("");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error(
+          "Admin session not found."
+        );
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/admin/scores/${scoreId}`,
+        {
+          method: "DELETE",
+
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+          "Unable to delete score."
+        );
+      }
+
+      setScores((currentScores) =>
+        currentScores.filter(
+          (item) => item.id !== scoreId
+        )
+      );
+
+      setSuccess(
+        "Score deleted successfully."
+      );
+    } catch (error) {
+      console.error(
+        "DELETE SCORE ERROR:",
+        error
+      );
+
+      setError(
+        error.message ||
+        "Unable to delete score."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // ----------------------------------------
+  // LOADING
+  // ----------------------------------------
+
   if (loading) {
     return (
       <div className="admin-scores-page">
@@ -167,6 +393,7 @@ export default function Scores() {
 
   return (
     <div className="admin-scores-page">
+
       {/* Header */}
       <div className="admin-scores-header">
         <div>
@@ -205,12 +432,37 @@ export default function Scores() {
       {error && (
         <div className="scores-alert">
           <AlertCircle size={18} />
+
           <span>{error}</span>
+
+          <button
+            type="button"
+            onClick={() => setError("")}
+            className="scores-alert-close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Success */}
+      {success && (
+        <div className="scores-success">
+          <span>{success}</span>
+
+          <button
+            type="button"
+            onClick={() => setSuccess("")}
+            className="scores-alert-close"
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
 
       {/* Stats */}
       <div className="scores-summary">
+
         <div className="score-summary-card">
           <div className="score-summary-icon">
             <Target size={19} />
@@ -254,10 +506,12 @@ export default function Scores() {
             <span>Highest Score</span>
           </div>
         </div>
+
       </div>
 
       {/* Filters */}
       <div className="scores-toolbar">
+
         <div className="scores-search">
           <Search size={18} />
 
@@ -294,6 +548,7 @@ export default function Scores() {
             Low — 1 to 27
           </option>
         </select>
+
       </div>
 
       <div className="scores-result-count">
@@ -320,27 +575,40 @@ export default function Scores() {
         </div>
       ) : (
         <div className="scores-table-card">
+
           <div className="scores-table-wrapper">
+
             <table className="scores-table">
+
               <thead>
                 <tr>
                   <th>Player</th>
                   <th>Score</th>
                   <th>Played Date</th>
                   <th>Submitted</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
+
                 {filteredScores.map((item) => {
                   const profile =
                     item.profiles;
 
+                  const isUpdating =
+                    updatingId === item.id;
+
+                  const isDeleting =
+                    deletingId === item.id;
+
                   return (
                     <tr key={item.id}>
+
                       {/* Player */}
                       <td>
                         <div className="score-player">
+
                           <div className="score-avatar">
                             {profile?.full_name
                               ?.charAt(0)
@@ -349,6 +617,7 @@ export default function Scores() {
                           </div>
 
                           <div className="score-player-details">
+
                             <strong>
                               {profile?.full_name ||
                                 "Unnamed User"}
@@ -362,7 +631,9 @@ export default function Scores() {
                               {profile?.email ||
                                 "No email"}
                             </span>
+
                           </div>
+
                         </div>
                       </td>
 
@@ -380,6 +651,7 @@ export default function Scores() {
                       {/* Played */}
                       <td>
                         <div className="score-date">
+
                           <CalendarDays
                             size={14}
                           />
@@ -387,6 +659,7 @@ export default function Scores() {
                           {formatDate(
                             item.played_at
                           )}
+
                         </div>
                       </td>
 
@@ -398,14 +671,237 @@ export default function Scores() {
                           )}
                         </span>
                       </td>
+
+                      {/* Actions */}
+                      <td>
+                        <div className="score-actions">
+
+                          <button
+                            type="button"
+                            className="score-action-button edit"
+                            onClick={() =>
+                              openEditModal(item)
+                            }
+                            disabled={
+                              isUpdating ||
+                              isDeleting
+                            }
+                            title="Edit score"
+                          >
+                            <Pencil size={10} />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            className="score-action-button delete"
+                            onClick={() =>
+                              handleDeleteScore(
+                                item.id
+                              )
+                            }
+                            disabled={
+                              isUpdating ||
+                              isDeleting
+                            }
+                            title="Delete score"
+                          >
+                            <Trash2 size={15} />
+
+                            {isDeleting
+                              ? "Deleting..."
+                              : "Delete"}
+                          </button>
+
+                        </div>
+                      </td>
+
                     </tr>
                   );
                 })}
+
               </tbody>
+
             </table>
+
           </div>
+
         </div>
       )}
+
+      {/* =====================================
+          EDIT SCORE MODAL
+          ===================================== */}
+
+      {editingScore && (
+        <div
+          className="score-modal-overlay"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget
+            ) {
+              closeEditModal();
+            }
+          }}
+        >
+
+          <div className="score-modal">
+
+            {/* Modal Header */}
+            <div className="score-modal-header">
+
+              <div>
+                <span className="admin-page-eyebrow">
+                  Score Management
+                </span>
+
+                <h2>Edit Score</h2>
+
+                <p>
+                  Update the subscriber's
+                  Stableford score.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="score-modal-close"
+                onClick={closeEditModal}
+                disabled={!!updatingId}
+              >
+                <X size={19} />
+              </button>
+
+            </div>
+
+            {/* User Info */}
+            <div className="score-modal-user">
+
+              <div className="score-avatar">
+                {editingScore.profiles?.full_name
+                  ?.charAt(0)
+                  ?.toUpperCase() || "U"}
+              </div>
+
+              <div>
+                <strong>
+                  {editingScore.profiles?.full_name ||
+                    "Unnamed User"}
+                </strong>
+
+                <span>
+                  {editingScore.profiles?.email ||
+                    "No email"}
+                </span>
+              </div>
+
+            </div>
+
+            {/* Form */}
+            <div className="score-modal-form">
+
+              <div className="score-form-group">
+
+                <label htmlFor="admin-score">
+                  Stableford Score
+                </label>
+
+                <input
+                  id="admin-score"
+                  type="number"
+                  min="1"
+                  max="45"
+                  step="1"
+                  value={editScore}
+                  onChange={(event) =>
+                    setEditScore(
+                      event.target.value
+                    )
+                  }
+                  disabled={!!updatingId}
+                />
+
+                <small>
+                  Score must be between 1 and 45.
+                </small>
+
+              </div>
+
+              <div className="score-form-group">
+
+                <label htmlFor="admin-played-date">
+                  Played Date
+                </label>
+
+                <input
+                  id="admin-played-date"
+                  type="date"
+                  value={editPlayedAt}
+                  onChange={(event) =>
+                    setEditPlayedAt(
+                      event.target.value
+                    )
+                  }
+                  disabled={!!updatingId}
+                />
+
+                <small>
+                  One score per user per date.
+                </small>
+
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="score-modal-footer">
+
+              <button
+                type="button"
+                className="score-modal-cancel"
+                onClick={closeEditModal}
+                disabled={!!updatingId}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="score-modal-save"
+                onClick={() =>
+                  handleUpdateScore(
+                    editingScore.id,
+                    editScore,
+                    editPlayedAt
+                  )
+                }
+                disabled={!!updatingId}
+              >
+                {updatingId ? (
+                  <>
+                    <RefreshCw
+                      size={16}
+                      className="spin"
+                    />
+
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+
+                    Save Changes
+                  </>
+                )}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }

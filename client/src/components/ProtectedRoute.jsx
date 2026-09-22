@@ -1,68 +1,219 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import {supabase} from "../lib/supabase";
+import { supabase } from "../lib/supabase.js";
 
-export default function ProtectedRoute({ children }) {
+const API_URL = import.meta.env.VITE_API_URL;
+
+const ProtectedRoute = ({
+  children,
+  requireSubscription = false,
+}) => {
   const location = useLocation();
 
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(null);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [subscription, setSubscription] = useState(null);
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    const checkAccess = async () => {
+      try {
+        setLoading(true);
 
-      if (mounted) {
-        setSession(session);
-        setLoading(false);
+        // -----------------------------
+        // 1. GET CURRENT USER
+        // -----------------------------
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          if (mounted) {
+            setUser(null);
+            setProfile(null);
+            setSubscription(null);
+            setLoading(false);
+          }
+
+          return;
+        }
+
+        if (!mounted) return;
+
+        setUser(user);
+
+        // -----------------------------
+        // 2. GET PROFILE + ROLE
+        // -----------------------------
+
+        const {
+          data: profileData,
+          error: profileError,
+        } = await supabase
+          .from("profiles")
+          .select("id, role, full_name")
+          .eq("id", user.id)
+          .single();
+
+        if (profileError) {
+          console.error(
+            "Profile fetch error:",
+            profileError
+          );
+        }
+
+        if (!mounted) return;
+
+        setProfile(profileData);
+
+        // -----------------------------
+        // 3. ADMIN BYPASS
+        // -----------------------------
+
+        if (profileData?.role === "admin") {
+          setLoading(false);
+          return;
+        }
+
+        // -----------------------------
+        // 4. SUBSCRIPTION CHECK
+        // -----------------------------
+
+        if (requireSubscription) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          if (!session) {
+            if (mounted) {
+              setUser(null);
+              setLoading(false);
+            }
+
+            return;
+          }
+
+          const response = await fetch(
+            `${API_URL}/api/subscriptions/me`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            console.error(
+              "Subscription API error:",
+              result.message
+            );
+
+            if (mounted) {
+              setSubscription(null);
+            }
+          } else {
+            if (mounted) {
+              setSubscription(
+                result.subscription || null
+              );
+            }
+          }
+        }
+
+        if (mounted) {
+          setLoading(false);
+        }
+
+      } catch (error) {
+        console.error(
+          "ProtectedRoute error:",
+          error
+        );
+
+        if (mounted) {
+          setSubscription(null);
+          setLoading(false);
+        }
       }
-    }
+    };
 
-    loadSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (mounted) {
-        setSession(newSession);
-        setLoading(false);
-      }
-    });
+    checkAccess();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
-  }, []);
+  }, [requireSubscription]);
+
+  // -----------------------------
+  // LOADING
+  // -----------------------------
 
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          color: "var(--muted)",
-        }}
-      >
-        Checking authentication...
+      <div className="protected-route-loading">
+        Checking access...
       </div>
     );
   }
 
-  if (!session) {
+  // -----------------------------
+  // NOT LOGGED IN
+  // -----------------------------
+
+  if (!user) {
     return (
       <Navigate
         to="/login"
         replace
-        state={{ from: location.pathname }}
+        state={{
+          from: location.pathname,
+        }}
       />
     );
   }
 
+  // -----------------------------
+  // ADMIN
+  // -----------------------------
+
+  if (profile?.role === "admin") {
+    return children;
+  }
+
+  // -----------------------------
+  // SUBSCRIPTION REQUIRED
+  // -----------------------------
+
+  if (
+    requireSubscription &&
+    !subscription
+  ) {
+    return (
+      <Navigate
+        to="/pricing"
+        replace
+        state={{
+          from: location.pathname,
+          message:
+            "An active subscription is required to access this page.",
+        }}
+      />
+    );
+  }
+
+  // -----------------------------
+  // ACCESS GRANTED
+  // -----------------------------
+
   return children;
-}
+};
+
+export default ProtectedRoute;
