@@ -100,16 +100,22 @@ const handleRazorpayWebhook = async (req, res) => {
     const currentPeriodStart =
       subscription.current_start
         ? new Date(
-            subscription.current_start * 1000
-          ).toISOString()
+          subscription.current_start * 1000
+        ).toISOString()
         : null;
 
     const currentPeriodEnd =
       subscription.current_end
         ? new Date(
-            subscription.current_end * 1000
-          ).toISOString()
+          subscription.current_end * 1000
+        ).toISOString()
         : null;
+
+    const updateData = {
+      status,
+      current_period_start: currentPeriodStart,
+      current_period_end: currentPeriodEnd,
+    };
 
     // ----------------------------------------
     // Cancellation state
@@ -135,6 +141,8 @@ const handleRazorpayWebhook = async (req, res) => {
         cancel_at_period_end:
           cancelAtPeriodEnd,
       })
+      .from("subscriptions")
+      .update(updateData)
       .eq(
         "stripe_subscription_id",
         razorpaySubscriptionId

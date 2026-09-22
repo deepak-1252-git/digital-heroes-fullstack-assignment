@@ -42,11 +42,17 @@ const createSubscription = async (req, res) => {
     }
 
     // Create Razorpay subscription
+
+    const totalCount =
+      billingInterval === "monthly"
+        ? 12
+        : 1;
+
     const razorpaySubscription =
       await razorpay.subscriptions.create({
         plan_id: razorpayPlanId,
         customer_notify: 1,
-        total_count: 12,
+        total_count: totalCount,
 
         notes: {
           user_id: user.id,
