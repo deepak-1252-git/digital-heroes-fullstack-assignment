@@ -4,6 +4,7 @@ import {
   createSubscription,
   verifySubscriptionPayment,
   getMySubscription,
+  cancelSubscription,
 } from "../controllers/subscription.controller.js";
 
 import authenticateUser from "../middleware/auth.middleware.js";
@@ -26,6 +27,12 @@ router.get(
   "/me",
   authenticateUser,
   getMySubscription
+);
+
+router.post(
+  "/cancle",
+  authenticateUser,
+  cancelSubscription
 );
 
 export default router;

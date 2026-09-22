@@ -3,7 +3,8 @@ import supabase from "../config/supabase.js";
 
 const handleRazorpayWebhook = async (req, res) => {
   try {
-    const webhookSignature = req.headers["x-razorpay-signature"];
+    const webhookSignature =
+      req.headers["x-razorpay-signature"];
 
     if (!webhookSignature) {
       return res.status(400).json({
@@ -12,7 +13,7 @@ const handleRazorpayWebhook = async (req, res) => {
       });
     }
 
-    // req.body is RAW Buffer
+    // Razorpay webhook body must remain raw
     const rawBody = req.body.toString("utf8");
 
     const expectedSignature = crypto
@@ -24,7 +25,9 @@ const handleRazorpayWebhook = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== webhookSignature) {
-      console.error("Invalid Razorpay webhook signature");
+      console.error(
+        "Invalid Razorpay webhook signature"
+      );
 
       return res.status(400).json({
         success: false,
@@ -34,11 +37,16 @@ const handleRazorpayWebhook = async (req, res) => {
 
     const event = JSON.parse(rawBody);
 
-    console.log("Razorpay webhook:", event.event);
+    console.log(
+      "Razorpay webhook event:",
+      event.event
+    );
 
     const subscription =
       event.payload?.subscription?.entity;
 
+    // Some Razorpay webhook events may not contain
+    // subscription information.
     if (!subscription) {
       return res.status(200).json({
         success: true,
@@ -46,12 +54,12 @@ const handleRazorpayWebhook = async (req, res) => {
       });
     }
 
-    const razorpaySubscriptionId = subscription.id;
+    const razorpaySubscriptionId =
+      subscription.id;
 
-    /*
-      Map Razorpay subscription states
-      to our existing Supabase status values.
-    */
+    // ----------------------------------------
+    // Map Razorpay status → our DB status
+    // ----------------------------------------
 
     let status;
 
@@ -73,8 +81,11 @@ const handleRazorpayWebhook = async (req, res) => {
         break;
 
       case "authenticated":
-        // User has completed authorization,
-        // but subscription has not started yet.
+      case "created":
+        status = "inactive";
+        break;
+
+      case "completed":
         status = "inactive";
         break;
 
@@ -82,10 +93,47 @@ const handleRazorpayWebhook = async (req, res) => {
         status = "inactive";
     }
 
+    // ----------------------------------------
+    // Convert Razorpay timestamps
+    // ----------------------------------------
+
+    const currentPeriodStart =
+      subscription.current_start
+        ? new Date(
+            subscription.current_start * 1000
+          ).toISOString()
+        : null;
+
+    const currentPeriodEnd =
+      subscription.current_end
+        ? new Date(
+            subscription.current_end * 1000
+          ).toISOString()
+        : null;
+
+    // ----------------------------------------
+    // Cancellation state
+    // ----------------------------------------
+
+    const cancelAtPeriodEnd =
+      event.event === "subscription.cancelled"
+        ? true
+        : false;
+
+    // ----------------------------------------
+    // Update Supabase
+    // ----------------------------------------
+
     const { error } = await supabase
       .from("subscriptions")
       .update({
         status,
+        current_period_start:
+          currentPeriodStart,
+        current_period_end:
+          currentPeriodEnd,
+        cancel_at_period_end:
+          cancelAtPeriodEnd,
       })
       .eq(
         "stripe_subscription_id",
@@ -100,16 +148,31 @@ const handleRazorpayWebhook = async (req, res) => {
 
       return res.status(500).json({
         success: false,
-        message: "Failed to update subscription",
+        message:
+          "Failed to update subscription",
       });
     }
+
+    console.log(
+      `Subscription ${razorpaySubscriptionId} updated:`,
+      {
+        event: event.event,
+        status,
+        currentPeriodStart,
+        currentPeriodEnd,
+        cancelAtPeriodEnd,
+      }
+    );
 
     return res.status(200).json({
       success: true,
       message: "Webhook processed",
     });
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error(
+      "Webhook error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,

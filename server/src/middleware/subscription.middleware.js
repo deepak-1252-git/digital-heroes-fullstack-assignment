@@ -1,10 +1,6 @@
 import { supabaseAdmin } from "../config/supabase.js";
 
-export const requireActiveSubscription = async (
-  req,
-  res,
-  next
-) => {
+export const requireActiveSubscription = async (req, res, next) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({
@@ -71,7 +67,6 @@ export const requireActiveSubscription = async (
       });
     }
 
-    // Attach subscription to request
     req.subscription = subscription;
 
     next();
@@ -87,3 +82,5 @@ export const requireActiveSubscription = async (
     });
   }
 };
+
+export default requireActiveSubscription;

@@ -287,8 +287,128 @@ const getMySubscription = async (req, res) => {
   }
 };
 
+// ---------------------------------------
+// ---------------------------------------
+const cancelSubscription = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: subscription, error } =
+      await supabase
+        .from("subscriptions")
+        .select(`
+          id,
+          user_id,
+          status,
+          stripe_subscription_id,
+          current_period_end,
+          cancel_at_period_end
+        `)
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+      console.error(
+        "Find subscription error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to find subscription",
+      });
+    }
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Active subscription not found",
+      });
+    }
+
+    if (subscription.cancel_at_period_end) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Subscription is already scheduled for cancellation",
+      });
+    }
+
+    if (!subscription.stripe_subscription_id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Razorpay subscription ID not found",
+      });
+    }
+
+    // Schedule cancellation at the end
+    // of the current billing cycle.
+    const razorpaySubscription =
+      await razorpay.subscriptions.cancel(
+        subscription.stripe_subscription_id,
+        {
+          cancel_at_cycle_end: true,
+        }
+      );
+
+    const {
+      data: updatedSubscription,
+      error: updateError,
+    } = await supabase
+      .from("subscriptions")
+      .update({
+        cancel_at_period_end: true,
+      })
+      .eq("id", subscription.id)
+      .eq("user_id", userId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error(
+        "Subscription DB update error:",
+        updateError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Cancellation failed to sync with database",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Subscription will be cancelled at the end of the current billing period",
+      subscription: updatedSubscription,
+      razorpaySubscription,
+    });
+  } catch (error) {
+    console.error(
+      "Cancel subscription error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to cancel subscription",
+    });
+  }
+};
+
 export {
   createSubscription,
   verifySubscriptionPayment,
   getMySubscription,
+  cancelSubscription,
 };
