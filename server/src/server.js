@@ -9,6 +9,7 @@ import adminSubscriptionsRoutes from "./routes/admin.subscriptions.routes.js";
 import razorpayWebhookRoutes from "./routes/razorpay.webhook.routes.js";
 import drawRoutes from "./routes/draw.routes.js";
 import winnerRoutes from "./routes/winner.routes.js";
+import adminScoresRoutes from "./routes/admin.scores.routes.js";
 
 const app = express();
 
@@ -38,6 +39,8 @@ app.use("/api/admin/users", adminUsersRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 
 app.use("/api/admin/subscriptions",adminSubscriptionsRoutes );
+
+app.use( "/api/admin/scores", adminScoresRoutes );
 
 app.use("/api/draws", drawRoutes);
 
