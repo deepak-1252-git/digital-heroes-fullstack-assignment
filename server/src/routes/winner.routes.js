@@ -7,27 +7,36 @@ import {
   markPayoutPaid,
 } from "../controllers/winner.controller.js";
 
-import authMiddleware from "../middleware/auth.middleware.js";
+import authenticateUser from "../middleware/auth.middleware.js";
+import requireAdmin from "../middleware/admin.middleware.js";
 
 const router = express.Router();
 
-router.get("/", authMiddleware, getWinners);
+router.get(
+  "/",
+  authenticateUser,
+  requireAdmin,
+  getWinners
+);
 
 router.patch(
   "/:winnerId/approve",
-  authMiddleware,
+  authenticateUser,
+  requireAdmin,
   approveWinner
 );
 
 router.patch(
   "/:winnerId/reject",
-  authMiddleware,
+  authenticateUser,
+  requireAdmin,
   rejectWinner
 );
 
 router.patch(
   "/:winnerId/payout",
-  authMiddleware,
+  authenticateUser,
+  requireAdmin,
   markPayoutPaid
 );
 

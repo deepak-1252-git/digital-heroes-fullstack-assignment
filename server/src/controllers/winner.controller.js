@@ -1,28 +1,13 @@
 import supabase from "../config/supabase.js";
 
-const isAdmin = async (userId) => {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single();
+/*
+|--------------------------------------------------------------------------
+| GET ALL WINNERS
+|--------------------------------------------------------------------------
+*/
 
-  if (error || !data) return false;
-
-  return data.role === "admin";
-};
-
-
-// GET ALL WINNERS
-export const getWinners = async (req, res) => {
+const getWinners = async (req, res) => {
   try {
-    if (!(await isAdmin(req.user.id))) {
-      return res.status(403).json({
-        success: false,
-        message: "Admin access required",
-      });
-    }
-
     const { data, error } = await supabase
       .from("winners")
       .select(`
@@ -35,16 +20,19 @@ export const getWinners = async (req, res) => {
         created_at,
 
         profiles (
+          id,
           full_name,
           email
         ),
 
         draws (
+          id,
           draw_month,
           numbers
         ),
 
         prize_pools (
+          id,
           tier,
           percentage,
           total_amount
@@ -54,144 +42,345 @@ export const getWinners = async (req, res) => {
           id,
           file_url,
           status,
-          admin_note
+          admin_note,
+          created_at
+        ),
+
+        payouts (
+          id,
+          amount,
+          status,
+          paid_at,
+          created_at
         )
       `)
-      .order("created_at", { ascending: false });
+      .order("created_at", {
+        ascending: false,
+      });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Get winners error:", error);
 
-    res.json({
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch winners",
+      });
+    }
+
+    return res.status(200).json({
       success: true,
-      winners: data,
+      winners: data || [],
     });
-
   } catch (error) {
     console.error("Get winners error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server error",
     });
   }
 };
 
 
-// APPROVE WINNER
-export const approveWinner = async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| APPROVE WINNER
+|--------------------------------------------------------------------------
+*/
+
+const approveWinner = async (req, res) => {
   try {
-    if (!(await isAdmin(req.user.id))) {
-      return res.status(403).json({
+    const { winnerId } = req.params;
+
+    if (!winnerId) {
+      return res.status(400).json({
         success: false,
-        message: "Admin access required",
+        message: "Winner ID is required",
       });
     }
 
-    const { winnerId } = req.params;
+    const { data: winner, error: winnerError } =
+      await supabase
+        .from("winners")
+        .select(`
+          id,
+          verification_status
+        `)
+        .eq("id", winnerId)
+        .single();
 
-    const { data, error } = await supabase
-      .from("winners")
+    if (winnerError || !winner) {
+      return res.status(404).json({
+        success: false,
+        message: "Winner not found",
+      });
+    }
+
+    if (winner.verification_status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Winner is not pending verification",
+      });
+    }
+
+    const { data: updatedWinner, error } =
+      await supabase
+        .from("winners")
+        .update({
+          verification_status: "approved",
+        })
+        .eq("id", winnerId)
+        .select()
+        .single();
+
+    if (error) {
+      console.error("Approve winner error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to approve winner",
+      });
+    }
+
+    /*
+     * If a proof exists, mark the proof as approved too.
+     */
+    const { error: proofError } = await supabase
+      .from("winner_proofs")
       .update({
-        verification_status: "approved",
+        status: "approved",
       })
-      .eq("id", winnerId)
-      .select()
-      .single();
+      .eq("winner_id", winnerId);
 
-    if (error) throw error;
+    if (proofError) {
+      console.error(
+        "Winner proof update error:",
+        proofError
+      );
+    }
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Winner approved",
-      winner: data,
+      message: "Winner approved successfully",
+      winner: updatedWinner,
     });
-
   } catch (error) {
     console.error("Approve winner error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server error",
     });
   }
 };
 
 
-// REJECT WINNER
-export const rejectWinner = async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| REJECT WINNER
+|--------------------------------------------------------------------------
+*/
+
+const rejectWinner = async (req, res) => {
   try {
-    if (!(await isAdmin(req.user.id))) {
-      return res.status(403).json({
+    const { winnerId } = req.params;
+
+    if (!winnerId) {
+      return res.status(400).json({
         success: false,
-        message: "Admin access required",
+        message: "Winner ID is required",
       });
     }
 
-    const { winnerId } = req.params;
+    const { data: winner, error: winnerError } =
+      await supabase
+        .from("winners")
+        .select(`
+          id,
+          verification_status
+        `)
+        .eq("id", winnerId)
+        .single();
 
-    const { data, error } = await supabase
-      .from("winners")
+    if (winnerError || !winner) {
+      return res.status(404).json({
+        success: false,
+        message: "Winner not found",
+      });
+    }
+
+    if (winner.verification_status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Winner is not pending verification",
+      });
+    }
+
+    const { data: updatedWinner, error } =
+      await supabase
+        .from("winners")
+        .update({
+          verification_status: "rejected",
+        })
+        .eq("id", winnerId)
+        .select()
+        .single();
+
+    if (error) {
+      console.error("Reject winner error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to reject winner",
+      });
+    }
+
+    /*
+     * Keep proof status synchronized.
+     */
+    const { error: proofError } = await supabase
+      .from("winner_proofs")
       .update({
-        verification_status: "rejected",
+        status: "rejected",
       })
-      .eq("id", winnerId)
-      .select()
-      .single();
+      .eq("winner_id", winnerId);
 
-    if (error) throw error;
+    if (proofError) {
+      console.error(
+        "Winner proof update error:",
+        proofError
+      );
+    }
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Winner rejected",
-      winner: data,
+      message: "Winner rejected successfully",
+      winner: updatedWinner,
     });
-
   } catch (error) {
     console.error("Reject winner error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server error",
     });
   }
 };
 
 
-// MARK PAYOUT AS PAID
-export const markPayoutPaid = async (req, res) => {
+/*
+|--------------------------------------------------------------------------
+| MARK PAYOUT AS PAID
+|--------------------------------------------------------------------------
+*/
+
+const markPayoutPaid = async (req, res) => {
   try {
-    if (!(await isAdmin(req.user.id))) {
-      return res.status(403).json({
+    const { winnerId } = req.params;
+
+    if (!winnerId) {
+      return res.status(400).json({
         success: false,
-        message: "Admin access required",
+        message: "Winner ID is required",
       });
     }
 
-    const { winnerId } = req.params;
+    const { data: winner, error: winnerError } =
+      await supabase
+        .from("winners")
+        .select(`
+          id,
+          prize_amount,
+          verification_status,
+          payout_status
+        `)
+        .eq("id", winnerId)
+        .single();
 
-    const { data, error } = await supabase
-      .from("winners")
+    if (winnerError || !winner) {
+      return res.status(404).json({
+        success: false,
+        message: "Winner not found",
+      });
+    }
+
+    if (winner.verification_status !== "approved") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Winner must be approved before payout",
+      });
+    }
+
+    if (winner.payout_status === "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Payout is already marked as paid",
+      });
+    }
+
+    /*
+     * Update winner payout status.
+     */
+    const { data: updatedWinner, error } =
+      await supabase
+        .from("winners")
+        .update({
+          payout_status: "paid",
+        })
+        .eq("id", winnerId)
+        .select()
+        .single();
+
+    if (error) {
+      console.error("Payout update error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update payout status",
+      });
+    }
+
+    /*
+     * If payout records exist, synchronize them.
+     *
+     * This query is intentionally separate so that the
+     * winner status remains the source of truth even if
+     * no payout row exists yet.
+     */
+    const { error: payoutError } = await supabase
+      .from("payouts")
       .update({
-        payout_status: "paid",
+        status: "paid",
+        paid_at: new Date().toISOString(),
       })
-      .eq("id", winnerId)
-      .select()
-      .single();
+      .eq("winner_id", winnerId);
 
-    if (error) throw error;
+    if (payoutError) {
+      console.error(
+        "Payout record update error:",
+        payoutError
+      );
+    }
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Payout marked as paid",
-      winner: data,
+      message: "Payout marked as paid successfully",
+      winner: updatedWinner,
     });
-
   } catch (error) {
-    console.error("Payout error:", error);
+    console.error("Mark payout paid error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server error",
     });
   }
+};
+
+export {
+  getWinners,
+  approveWinner,
+  rejectWinner,
+  markPayoutPaid,
 };

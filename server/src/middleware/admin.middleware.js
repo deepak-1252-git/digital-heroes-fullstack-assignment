@@ -11,20 +11,18 @@ const requireAdmin = async (req, res, next) => {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("id, role")
+      .select("role")
       .eq("id", req.user.id)
       .single();
 
-    if (error) {
-      console.error("Admin role check error:", error);
-
-      return res.status(500).json({
+    if (error || !profile) {
+      return res.status(403).json({
         success: false,
-        message: "Unable to verify admin access",
+        message: "Admin access required",
       });
     }
 
-    if (profile?.role !== "admin") {
+    if (profile.role !== "admin") {
       return res.status(403).json({
         success: false,
         message: "Admin access required",
@@ -37,7 +35,7 @@ const requireAdmin = async (req, res, next) => {
 
     return res.status(500).json({
       success: false,
-      message: "Admin authorization failed",
+      message: "Failed to verify admin access",
     });
   }
 };
