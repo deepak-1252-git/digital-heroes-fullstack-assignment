@@ -12,12 +12,14 @@ import AdminUsers from "./pages/admin/Users";
 import AdminSubscriptions from "./pages/admin/Subscriptions";
 import AdminScores from "./pages/admin/Scores";
 import AdminDraws from "./pages/admin/Draws";
-import AdminCharities from "./pages/admin/Charities";
+import AdminCharities from "./pages/admin/Charities"; 
 import AdminWinners from "./pages/admin/Winners";
 import AdminAnalytics from "./pages/admin/Analytics";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
 
 import Home from "./pages/public/Home";
 import HowItWorks from "./pages/public/HowItWorks";
@@ -50,6 +52,8 @@ function App() {
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword/>} />
 
         </Route>
 

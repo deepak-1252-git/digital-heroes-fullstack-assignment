@@ -274,6 +274,10 @@ export default function Login() {
                   )}
                 </button>
               </div>
+              
+              <Link to="/forgot-password" className="forgot-password">
+                Forgot password?
+              </Link>
 
               {errors.password && (
                 <span className="auth-field-error">
@@ -281,6 +285,7 @@ export default function Login() {
                 </span>
               )}
             </div>
+
 
             <button
               className="auth-submit"
